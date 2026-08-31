@@ -84,7 +84,11 @@ export async function launchResilient(
  */
 export async function withBrokerSession<T>(
   flowName: string,
-  fn: (page: Page & BrokerPage, evidence: RunEvidence) => Promise<T>,
+  fn: (
+    page: BrokerPage,
+    evidence: RunEvidence,
+    rawPage: Page,
+  ) => Promise<T>,
 ): Promise<{ result: T; evidence: RunEvidence }> {
   const client = getSolariClient()
   const runId = `${flowName}-${Date.now().toString(36)}`
@@ -107,10 +111,10 @@ export async function withBrokerSession<T>(
 
   try {
     const rawPage = await browser.newPage()
-    // Adapt Playwright Page -> BrokerPage so adapters never import Solari
-    // types directly and stay unit-testable.
+    // Wrap (NOT mutate) the Playwright page — adapters get the BrokerPage
+    // surface; orchestrator code needing raw Playwright APIs uses rawPage.
     const page = adaptPage(rawPage)
-    const result = await fn(page, evidence)
+    const result = await fn(page, evidence, rawPage)
     return { result, evidence }
   } finally {
     await browser.close() // never skip — the SDK hangs if you do
@@ -136,15 +140,17 @@ export async function getReplayUrl(sessionId: string): Promise<string | undefine
 // patchright-core is the client the Solari SDK ships with.
 import type { Page, Locator } from "patchright-core"
 
-function adaptPage(page: Page): Page & BrokerPage {
-  const adapted: BrokerPage = {
-    goto: (url, opts) => page.goto(url, opts) as unknown as Promise<void>,
+function adaptPage(page: Page): BrokerPage {
+  // Deliberately NOT Object.assign'ing onto the page — that shadows the
+  // page's own methods with wrappers that call themselves (infinite
+  // recursion). This is a plain closure object instead.
+  return {
+    goto: (url, opts) => page.goto(url, opts).then(() => undefined),
     locator: (selector) => adaptLocator(page.locator(selector)),
     waitForTimeout: (ms) => page.waitForTimeout(ms),
     url: () => page.url(),
     screenshot: (opts) => page.screenshot(opts) as Promise<Buffer>,
   }
-  return Object.assign(page, adapted)
 }
 
 function adaptLocator(locator: Locator): import("@/types").BrokerLocator {

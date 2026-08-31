@@ -4,9 +4,9 @@
  * stealth session and files evidence (screenshots + replay URLs) into the
  * store, so every action is auditable later.
  */
-import type { Identity, Listing, ScanRun } from "@/types"
-import { adapters, getAdapter } from "@/adapters/registry"
-import * as store from "@/store"
+import type { Identity, Listing, ScanRun } from "../types.ts"
+import { adapters, getAdapter } from "../adapters/registry.ts"
+import * as store from "../store/index.ts"
 import { withBrokerSession, getReplayUrl } from "./solari.ts"
 
 // ── scan ────────────────────────────────────────────────────────────────────
