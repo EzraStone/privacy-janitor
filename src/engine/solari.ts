@@ -39,6 +39,44 @@ export function getSolariClient(): Solari {
   })
 }
 
+/** Launch options that degrade to the free plan when stealth is paywalled. */
+const STEALTH_RECIPE = {
+  stealth: true,
+  captcha: true,
+  recording: true,
+  proxy: { country: "us", session: "", sessionDuration: 30 },
+} as const
+
+const DEFAULT_RECIPE = {
+  recording: true,
+} as const
+
+export async function launchResilient(
+  client: Solari,
+  runId: string,
+): Promise<{ browser: Awaited<ReturnType<Solari["launch"]>>; stealth: boolean }> {
+  try {
+    const browser = await client.launch({
+      ...STEALTH_RECIPE,
+      proxy: { country: "us", session: runId, sessionDuration: 30 },
+    })
+    return { browser, stealth: true }
+  } catch (err) {
+    // 402 FeatureRequiresPlan: free plan has no stealth/captcha/proxy.
+    // Degrade to the default browser rather than fail the whole run.
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes("FeatureRequiresPlan") || msg.includes("paid plan")) {
+      console.warn(
+        `[solari] stealth mode unavailable on this plan — falling back to the default browser. ` +
+          `Scans still work on most brokers; captcha-gated opt-outs need a paid plan.`,
+      )
+      const browser = await client.launch(DEFAULT_RECIPE)
+      return { browser, stealth: false }
+    }
+    throw err
+  }
+}
+
 /**
  * Run a broker flow inside a stealth session with guaranteed cleanup.
  * The callback receives a real Playwright page; everything it does is
@@ -63,12 +101,7 @@ export async function withBrokerSession<T>(
     },
   }
 
-  const browser = await client.launch({
-    stealth: true,
-    captcha: true,
-    recording: true,
-    proxy: { country: "us", session: runId, sessionDuration: 30 },
-  })
+  const { browser } = await launchResilient(client, runId)
 
   evidence.sessionId = browser.id
 
