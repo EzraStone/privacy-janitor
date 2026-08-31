@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+.turbo/
+
+# secrets — never commit
+.env
+.env.local
+.env.*.local
+
+# local data: sqlite db, evidence screenshots, solari replays
+data/
+
+# misc
+.DS_Store
+Thumbs.db
