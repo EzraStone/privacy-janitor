@@ -1,38 +1,94 @@
 # PrivacyJanitor
 
-Local-first, open-source data-broker removal agent.
+**Local-first, open-source data-broker removal agent.** Finds your PII on people-search sites and automates the *official* opt-out flows — driven by [Solari](https://getsolari.com) cloud stealth browsers, with screenshot and session-replay evidence for every single action.
 
-Finds your PII on people-search sites and automates the **official opt-out flows** — driven by Solari cloud stealth browsers, with screenshot and session-replay evidence for every action.
+Built for people who don't want to pay Incogni ($30/mo) or DeleteMe ($129/yr) for something they have a legal right to do for free.
 
-> Status: v0.1 under active development. Built in public.
+## How it works
 
-## What it does
+```
+┌────────────┐   ┌─────────────┐   ┌──────────────┐   ┌───────────────┐
+│  1. SCAN    │→ │ 2. THIS-IS-ME│→ │ 3. EXPOSURE   │→ │ 4. OPT-OUT    │
+│ Solari      │   │ confirm each │   │ SCORE (LLM,  │   │ agent fills   │
+│ stealth    │   │ listing —    │   │ PII-redacted │   │ form → YOU    │
+│ browsers   │   │ namesakes     │   │ prompts)     │   │ approve →     │
+│ search 3+  │   │ rejected      │   │ ranks risk   │   │ submit →      │
+│ brokers    │   │               │   │              │   │ email confirm │
+└────────────┘   └─────────────┘   └──────────────┘   └───────┬───────┘
+                                                            ▼
+                                                   ┌───────────────────┐
+                                                   │ 5. RE-SCAN DIFF   │
+                                                   │ removed ✓ relisted⚠│
+                                                   └───────────────────┘
+```
 
-1. **Scan** — searches data-broker sites for your listing(s)
-2. **Disambiguate** — you confirm which listings are actually you
-3. **Exposure score** — an LLM ranks your listings by risk so you kill the worst first
-4. **Opt-out** — the agent fills each broker's removal form, shows you a preview, and submits only after you approve
-5. **Evidence** — every run is screenshotted and session-recorded (Solari replay links)
-6. **Re-scan** — brokers relist; the diff report shows removed vs. relisted
+Every broker interaction runs inside a **recorded Solari session** — you get a screenshot before anything is submitted, and a replay link after. Nothing is ever sent to a broker without your explicit click.
 
-## Principles
+## Why Solari (the honest engineering reason)
 
-- **Local-first** — your data stays in a SQLite file on your machine. No accounts, no telemetry, no backend.
-- **BYO keys** — bring your own Solari and Groq API keys.
-- **Confirm-first** — nothing is ever submitted without your explicit approval of a filled-form preview.
-- **Redacted AI** — the LLM sees tokenized structure (`[NAME_1]`), never your raw PII.
+Data-broker opt-out flows are *designed* to be hostile to automation:
+
+- Whitepages hard-blocks non-browser HTTP clients (403 to any plain fetch)
+- Opt-out forms sit behind CAPTCHA walls (reCaptcha/hCaptcha/Turnstile)
+- Brokers fingerprint and IP-block datacenter traffic
+
+PrivacyJanitor runs every flow through Solari's stealth Chromium with residential proxies and automatic captcha solving — the tool literally cannot work without it. Each session is recorded, so every removal has replayable evidence.
+
+## Privacy model (read this part)
+
+| What | Where it lives |
+|------|----------------|
+| Your identity, listings, submissions | `data/privacy-janitor.db` (local SQLite) |
+| Evidence screenshots | `data/evidence/` (local files) |
+| Your PII in LLM prompts | **Never** — values are tokenized (`[NAME_1]`, `[ADDR_1]`) before any Groq call; see `src/scoring/redact.ts` |
+| Accounts, telemetry, backend | **None.** It's a localhost web app |
 
 ## Quickstart
 
-*(coming with the v0.1 release — see the build log below)*
+```bash
+git clone https://github.com/EzraStone/privacy-janitor.git
+cd privacy-janitor
+npm install
+cp .env.example .env        # add SOLARI_API_KEY (required) + GROQ_API_KEY (optional scoring)
+npm run dev                 # open http://localhost:3000
+```
+
+Get a Solari key at [console.getsolari.com](https://console.getsolari.com). Get a Groq key at [console.groq.com](https://console.groq.com) (optional — only for exposure ranking).
+
+## Broker coverage (v0.1)
+
+| Broker | Scan | Opt-out | Email confirm |
+|--------|------|---------|---------------|
+| Whitepages | ✅ | ✅ suppression request | ✅ |
+| Spokeo | ✅ | ✅ optout form | ✅ |
+| FastPeopleSearch | ✅ | ✅ removal wizard | ✅ |
+
+Broker DOMs drift. Adapters live in `src/adapters/` with layered selector fallbacks; `npm run smoke` catches breakage early. Adding a broker = implementing the `BrokerAdapter` interface and registering it — PRs welcome.
 
 ## Development
 
 ```bash
-npm install
-cp .env.example .env     # then fill in your keys
-npm run dev              # dashboard on http://localhost:3000
+npm run typecheck   # strict TS, zero errors
+npm run smoke       # adapter sanity checks (no API keys needed)
+npm run dev         # dashboard
 ```
+
+### Architecture
+
+```
+src/
+├── types.ts               # domain model + BrokerAdapter interface
+├── store/                 # node:sqlite (zero native deps), local only
+├── engine/
+│   ├── solari.ts          # stealth session recipe, evidence, replay polling
+│   └── orchestrator.ts    # scan / prepare / approve / submit / confirm / rescan
+├── adapters/              # one per broker + shared DOM fallback helpers
+└── scoring/               # PII redaction + Groq exposure ranking
+```
+
+## Disclaimer
+
+Use only for your own data, or with the consent of the person whose data it is. Opt-out submissions are legal requests under the relevant privacy laws (CCPA/CPRA et al.); this tool automates *official, broker-provided* removal flows — it does not bypass anything a human couldn't do with a browser.
 
 ## License
 

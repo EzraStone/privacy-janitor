@@ -21,7 +21,8 @@ import type {
   OptOutReceipt,
   PreparedOptOut,
 } from "@/types"
-import { newId } from "@/store"
+import { newId } from "../store/index.ts"
+import { firstVisible, tryAllTexts, tryInnerText, scoreMatch } from "./helpers.ts"
 
 const SUPPRESSION_URL = "https://www.whitepages.com/suppression_requests"
 
@@ -350,47 +351,6 @@ async function extractProfileUrls(page: BrokerPage, identity: Identity): Promise
   return [...new Set(hrefs)]
 }
 
-async function firstVisible(
-  page: BrokerPage,
-  selectors: string[],
-): Promise<import("@/types").BrokerLocator | null> {
-  for (const sel of selectors) {
-    const loc = page.locator(sel).first()
-    try {
-      if (await loc.isVisible()) return loc
-    } catch {
-      /* selector invalid on this DOM */
-    }
-  }
-  return null
-}
-
-async function tryInnerText(page: BrokerPage, selector: string): Promise<string | undefined> {
-  try {
-    const loc = page.locator(selector).first()
-    if (await loc.isVisible()) return (await loc.innerText()).trim()
-  } catch {
-    /* not present */
-  }
-  return undefined
-}
-
-async function tryAllTexts(page: BrokerPage, selectors: string[]): Promise<string[]> {
-  for (const sel of selectors) {
-    try {
-      const loc = page.locator(sel)
-      if ((await loc.count()) > 0) {
-        const texts = await loc.allInnerTexts()
-        const clean = texts.map((t) => t.trim()).filter(Boolean)
-        if (clean.length) return clean.slice(0, 10)
-      }
-    } catch {
-      /* try next */
-    }
-  }
-  return []
-}
-
-async function pressEnter(loc: import("@/types").BrokerLocator): Promise<void> {
-  await loc.press("Enter")
+function pressEnter(loc: import("@/types").BrokerLocator): Promise<void> {
+  return loc.press("Enter")
 }

@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "smoke": "node scripts/smoke.mjs",
+    "smoke": "node --experimental-strip-types scripts/smoke.mts",
     "scan": "node scripts/scan.mjs"
   },
   "dependencies": {

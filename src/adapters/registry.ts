@@ -1,8 +1,8 @@
 /** Registry of all broker adapters. The engine iterates this. */
 import type { BrokerAdapter } from "@/types"
-import { whitepages } from "./whitepages"
-import { spokeo } from "./spokeo"
-import { fastpeoplesearch } from "./fastpeoplesearch"
+import { whitepages } from "./whitepages.ts"
+import { spokeo } from "./spokeo.ts"
+import { fastpeoplesearch } from "./fastpeoplesearch.ts"
 
 export const adapters: BrokerAdapter[] = [whitepages, spokeo, fastpeoplesearch]
 

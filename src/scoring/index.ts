@@ -8,7 +8,7 @@
  */
 import Groq from "groq-sdk"
 import type { Identity, Listing } from "@/types"
-import { buildRedactionMap, redactListing, redactText } from "./redact"
+import { buildRedactionMap, redactListing, redactText } from "./redact.ts"
 
 export interface ListingRisk {
   listingId: string

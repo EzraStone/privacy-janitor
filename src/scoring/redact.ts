@@ -26,7 +26,13 @@ export function buildRedactionMap(identity: Identity, listings: Listing[]): Reda
 
   for (const l of listings) {
     values.add(l.displayName)
-    l.exposedData.addresses?.forEach((a) => values.add(a))
+    l.exposedData.addresses?.forEach((a) => {
+      values.add(a)
+      // Also register each comma-separated segment so PARTIAL addresses
+      // ("742 Evergreen Terrace") redact even when the full value with
+      // city/state doesn't appear verbatim.
+      a.split(",").map((s) => s.trim()).filter((s) => s.length > 3).forEach((seg) => values.add(seg))
+    })
     l.exposedData.phones?.forEach((p) => values.add(p))
     l.exposedData.emails?.forEach((e) => values.add(e))
     l.exposedData.relatives?.forEach((r) => values.add(r))
@@ -52,7 +58,7 @@ export function buildRedactionMap(identity: Identity, listings: Listing[]): Reda
       token = `[PHONE_${++phoneN}]`
     } else if (v.includes("@")) {
       token = `[EMAIL_${++emailN}]`
-    } else if (/\b(st|street|ave|avenue|rd|road|dr|drive|blvd|ln|lane|ct|court|city|state)\b/i.test(v)) {
+    } else if (/\b(st|street|ave|avenue|rd|road|dr|drive|blvd|ln|lane|ct|court|city|state|terrace|way|place|plaza|pkwy|highway|loop|circle|trail|apt|unit)\b/i.test(v)) {
       token = `[ADDR_${++addrN}]`
     } else {
       token = `[RELATIVE_${++relN}]` // fall back: relative-ish names
@@ -72,14 +78,8 @@ export function redactText(text: string, map: RedactionMap): string {
     (a, b) => b[0].length - a[0].length,
   )
   for (const [value, token] of entries) {
-    // plain string split-join; regex escaping avoided deliberately
-    out = out.split(value).join(token)
-    // also handle simple title-case variance
-    const titled = value
-      .split(" ")
-      .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
-      .join(" ")
-    out = out.split(titled).join(token)
+    const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    out = out.replace(new RegExp(escaped, "gi"), token)
   }
   return out
 }

@@ -7,7 +7,7 @@
 import type { Identity, Listing, ScanRun } from "@/types"
 import { adapters, getAdapter } from "@/adapters/registry"
 import * as store from "@/store"
-import { withBrokerSession, getReplayUrl } from "./solari"
+import { withBrokerSession, getReplayUrl } from "./solari.ts"
 
 // ── scan ────────────────────────────────────────────────────────────────────
 

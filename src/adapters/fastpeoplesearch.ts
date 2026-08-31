@@ -17,8 +17,8 @@ import type {
   OptOutReceipt,
   PreparedOptOut,
 } from "@/types"
-import { newId } from "@/store"
-import { firstVisible, tryAllTexts, tryClick, tryInnerText, scoreMatch } from "./helpers"
+import { newId } from "../store/index.ts"
+import { firstVisible, tryAllTexts, tryClick, tryInnerText, scoreMatch } from "./helpers.ts"
 
 const REMOVAL_URL = "https://www.fastpeoplesearch.com/removal"
 
