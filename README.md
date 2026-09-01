@@ -57,11 +57,15 @@ Get a Solari key at [console.getsolari.com](https://console.getsolari.com). Get 
 
 ## Broker coverage (v0.1)
 
-| Broker | Scan | Opt-out | Email confirm |
-|--------|------|---------|---------------|
-| Whitepages | ✅ | ✅ suppression request | ✅ |
-| Spokeo | ✅ | ✅ optout form | ✅ |
-| FastPeopleSearch | ✅ | ✅ removal wizard | ✅ |
+| Broker | Scan | Opt-out | Email confirm | Verified |
+|--------|------|---------|---------------|----------|
+| Whitepages | ✅ | ✅ URL-first suppression wizard | ✅ | live 2026-08 |
+| Spokeo | ✅ | ✅ optout form (url+email) | ✅ | live 2026-08 |
+| FastPeopleSearch | ✅ | ✅ subject request form | ✅ | live 2026-08 |
+
+All three brokers block the default browser with Cloudflare/bot walls — every
+flow in this table was verified end-to-end through Solari **stealth** sessions
+(residential proxy + auto captcha solving + session recording).
 
 Broker DOMs drift. Adapters live in `src/adapters/` with layered selector fallbacks; `npm run smoke` catches breakage early. Adding a broker = implementing the `BrokerAdapter` interface and registering it — PRs welcome.
 
