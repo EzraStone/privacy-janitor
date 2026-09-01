@@ -129,3 +129,29 @@ export function scoreMatch(
 
   return Math.min(score, 1)
 }
+
+/**
+ * Does a URL name-slug ("john-arbizu-smith", "jon-d-smith", "john-w-smith-jr")
+ * plausibly refer to the identity's full name? Middle names/initials and
+ * suffixes are tolerated; first-name shortenings (jon ~ john, johnny ~ john)
+ * match on the first two letters. Missing a real listing is worse than
+ * showing a namesake — the user confirms listings anyway.
+ */
+export function isPersonProfileSlug(
+  slug: string,
+  identity: { fullName: string },
+): boolean {
+  const tokens = slug.toLowerCase().split("-").filter(Boolean)
+  const suffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v"])
+  while (tokens.length > 2 && suffixes.has(tokens[tokens.length - 1])) tokens.pop()
+
+  const parts = identity.fullName.toLowerCase().split(/\s+/).filter(Boolean)
+  const first = parts[0]
+  const last = parts[parts.length - 1]
+  if (!first || !last || tokens.length < 2) return false
+
+  const lastTok = tokens[tokens.length - 1]
+  const firstTok = tokens[0]
+  if (lastTok !== last) return false
+  return firstTok.startsWith(first.slice(0, 2)) || first.startsWith(firstTok.slice(0, 2))
+}

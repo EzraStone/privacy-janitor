@@ -22,7 +22,7 @@ import type {
   PreparedOptOut,
 } from "@/types"
 import { newId } from "../store/index.ts"
-import { firstVisible, tryAllTexts, tryInnerText, scoreMatch } from "./helpers.ts"
+import { firstVisible, tryAllTexts, tryInnerText, scoreMatch, isPersonProfileSlug } from "./helpers.ts"
 
 const SUPPRESSION_URL = "https://www.whitepages.com/suppression_requests"
 
@@ -60,6 +60,7 @@ export const whitepages: BrokerAdapter = {
     const location = `${identity.city}, ${identity.stateCode}`
 
     const nameInput = await firstVisible(page, [
+      "#search-name", // live selector (verified 2026-08)
       'input[name="search_term"]',
       'input[placeholder*="Name"]',
       'input[aria-label*="Name"]',
@@ -69,6 +70,7 @@ export const whitepages: BrokerAdapter = {
     await nameInput.fill(`${firstName} ${lastName}`)
 
     const locInput = await firstVisible(page, [
+      "#search-location", // live selector (verified 2026-08)
       'input[name="search_location"]',
       'input[placeholder*="city"]',
       'input[placeholder*="City"]',
@@ -334,17 +336,29 @@ function listingIdSegment(listingUrl: string): string {
 }
 
 async function extractProfileUrls(page: BrokerPage, identity: Identity): Promise<string[]> {
-  const wanted = identity.fullName.toLowerCase().replace(/\s+/g, "-")
   const hrefs: string[] = []
 
   const anchors = page.locator('a[href*="/name/"]')
   const count = await anchors.count()
-  for (let i = 0; i < count && i < 30; i++) {
+  for (let i = 0; i < count && i < 60; i++) {
     const href = await anchors.nth(i).getAttribute("href")
     if (!href) continue
-    const url = href.startsWith("http") ? href : `https://www.whitepages.com${href}`
-    if (!url.includes("/name/")) continue
-    if (url.toLowerCase().includes(wanted)) hrefs.push(url)
+
+    // A real Whitepages PROFILE (verified 2026-08) is
+    //   /name/First-Middle-Last/City-ST/<record-id>     e.g.
+    //   /name/John-Smith/Seattle-WA/Pd96AoqKQN8
+    // Exactly 4 path segments; anything else is a search/filter/login page.
+    try {
+      const u = new URL(href.startsWith("http") ? href : `https://www.whitepages.com${href}`)
+      if (u.hostname.replace(/^www\./, "") !== "whitepages.com") continue
+      const segs = u.pathname.split("/").filter(Boolean)
+      if (segs.length !== 4 || segs[0] !== "name") continue
+      if (!isPersonProfileSlug(segs[1], identity)) continue
+      if (!segs[2].toLowerCase().endsWith(identity.stateCode.toLowerCase())) continue
+      hrefs.push(`${u.origin}${u.pathname}`)
+    } catch {
+      continue
+    }
   }
 
   // De-dupe, keep order.

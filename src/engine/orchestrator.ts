@@ -33,7 +33,9 @@ export async function runScan(identityId: string): Promise<ScanRun> {
         },
       )
 
-      // Save / refresh listings (dedupe by broker + url).
+      // Save / refresh listings (dedupe by broker + url), and drop stale
+      // rows for THIS broker that the fresh scan no longer sees — otherwise
+      // filter changes and broker drift leave phantom listings forever.
       const existing = store.listListings(identityId)
       for (const listing of listings) {
         const prior = existing.find((e) => e.brokerId === listing.brokerId && e.url === listing.url)
@@ -42,6 +44,12 @@ export async function runScan(identityId: string): Promise<ScanRun> {
         } else {
           listing.screenshotPath = evidence.evidenceDir // folder holding run pngs
           store.upsertListing(listing)
+        }
+      }
+      const freshUrls = new Set(listings.map((l) => l.url))
+      for (const prior of existing) {
+        if (prior.brokerId === adapter.id && !freshUrls.has(prior.url)) {
+          store.deleteListing(prior.id)
         }
       }
 

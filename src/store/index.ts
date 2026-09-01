@@ -215,6 +215,14 @@ export function setListingConfirmed(id: string, confirmed: boolean): void {
   open().prepare("UPDATE listings SET confirmed_mine = ? WHERE id = ?").run(confirmed ? 1 : 0, id)
 }
 
+/** Drop a listing (and its submissions/prepared state) entirely. */
+export function deleteListing(id: string): void {
+  const db = open()
+  db.prepare("DELETE FROM submissions WHERE listing_id = ?").run(id)
+  db.prepare("DELETE FROM prepared_optouts WHERE listing_id = ?").run(id)
+  db.prepare("DELETE FROM listings WHERE id = ?").run(id)
+}
+
 // ── submissions ─────────────────────────────────────────────────────────────
 
 export function createSubmission(listingId: string): Submission {

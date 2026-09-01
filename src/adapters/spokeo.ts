@@ -17,7 +17,7 @@ import type {
   PreparedOptOut,
 } from "@/types"
 import { newId } from "../store/index.ts"
-import { firstVisible, tryAllTexts, tryClick, tryInnerText, scoreMatch } from "./helpers.ts"
+import { firstVisible, tryAllTexts, tryClick, tryInnerText, scoreMatch, isPersonProfileSlug } from "./helpers.ts"
 
 const OPTOUT_URL = "https://www.spokeo.com/optout"
 
@@ -37,24 +37,47 @@ export const spokeo: BrokerAdapter = {
     const listings: Listing[] = []
     const now = new Date().toISOString()
 
-    const searchUrl = `https://www.spokeo.com/${encodeURIComponent(identity.fullName)}?country=USA&state=${identity.stateCode}&city=${encodeURIComponent(identity.city)}`
-    await page.goto(searchUrl, { waitUntil: "domcontentloaded" })
-    await page.waitForTimeout(4_000) // results render client-side
+    // Drive the homepage hero form (verified 2026-08: form#homepage_hero_form
+    // with input[name="q"] accepting names; city/state filter via URL params).
+    await page.goto("https://www.spokeo.com", { waitUntil: "domcontentloaded" })
+    await page.waitForTimeout(4_000)
 
-    // Collect profile links from result cards.
-    const anchors = page.locator('a[href*="spokeo.com/"]')
-    const count = Math.min(await anchors.count(), 30)
+    const q = await firstVisible(page, [
+      '#homepage_hero_form input[name="q"]', // live selector
+      'form[action="/search"] input[name="q"]',
+      'input[name="q"]',
+      'input[aria-label="Search"]',
+    ])
+    if (!q) throw new Error("Spokeo scan: search box not found")
+    await q.fill(identity.fullName)
+    await q.press("Enter")
+    await page.waitForTimeout(5_000) // results render client-side
+
+    // Spokeo's search lands on a state-filter page (/Name) — then metro, then
+    // CITY pages where actual person profiles live as
+    //   /First-Last/State/City/p<digits>   (verified 2026-08)
+    // Drill straight to the identity's city page.
+    const stateSlug = identity.stateCode === "DC" ? "District-of-Columbia" : fullStateName(identity.stateCode)
+    const citySlug = identity.city.replace(/\s+/g, "-")
+    if (!stateSlug) throw new Error(`Spokeo scan: unknown state code '${identity.stateCode}'`)
+    const cityUrl = `https://www.spokeo.com/${encodeURIComponent(identity.fullName)}/${stateSlug}/${encodeURIComponent(citySlug)}`
+    await page.goto(cityUrl, { waitUntil: "domcontentloaded" })
+    await page.waitForTimeout(5_000)
+
+    // Collect person-profile links: /First-Last/State/City/p<digits>
+    const anchors = page.locator("a")
+    const count = Math.min(await anchors.count(), 200)
     const urls: string[] = []
-    const wanted = identity.fullName.toLowerCase().replace(/\s+/g, "-")
 
     for (let i = 0; i < count; i++) {
       const href = await anchors.nth(i).getAttribute("href")
       if (!href) continue
       const url = href.startsWith("http") ? href : `https://www.spokeo.com${href}`
-      // Spokeo profile URLs look like spokeo.com/FirstName-LastName
-      if (/spokeo\.com\/[A-Za-z-]+$/.test(url) && url.toLowerCase().includes(wanted)) {
-        urls.push(url)
-      }
+      const m = url.match(/^https:\/\/www\.spokeo\.com\/([A-Za-z0-9-]+)\/([A-Za-z-]+)\/([A-Za-z0-9-]+)\/(p\d+)$/)
+      if (!m) continue
+      if (!isPersonProfileSlug(m[1], identity)) continue
+      if (m[2].toLowerCase() !== stateSlug.toLowerCase()) continue
+      urls.push(url.split("?")[0])
     }
 
     // Visit each profile (capped) and scrape exposed data.
@@ -196,4 +219,22 @@ export const spokeo: BrokerAdapter = {
     ])
     await page.waitForTimeout(2_000)
   },
+}
+
+/** State code -> Spokeo's state-page slug (e.g. "WA" -> "Washington"). */
+function fullStateName(code: string): string {
+  const map: Record<string, string> = {
+    AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+    CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+    HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+    KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+    MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi",
+    MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New-Hampshire",
+    NJ: "New-Jersey", NM: "New-Mexico", NY: "New-York", NC: "North-Carolina",
+    ND: "North-Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania",
+    RI: "Rhode-Island", SC: "South-Carolina", SD: "South-Dakota", TN: "Tennessee",
+    TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia", WA: "Washington",
+    WV: "West-Virginia", WI: "Wisconsin", WY: "Wyoming",
+  }
+  return map[code.toUpperCase()] ?? ""
 }

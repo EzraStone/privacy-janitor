@@ -18,7 +18,7 @@ import type {
   PreparedOptOut,
 } from "@/types"
 import { newId } from "../store/index.ts"
-import { firstVisible, tryAllTexts, tryClick, tryInnerText, scoreMatch } from "./helpers.ts"
+import { firstVisible, tryAllTexts, tryClick, tryInnerText, scoreMatch, isPersonProfileSlug } from "./helpers.ts"
 
 const REMOVAL_URL = "https://www.fastpeoplesearch.com/removal"
 
@@ -38,24 +38,51 @@ export const fastpeoplesearch: BrokerAdapter = {
     const listings: Listing[] = []
     const now = new Date().toISOString()
 
-    const slug = `${identity.fullName.replace(/\s+/g, "-").toLowerCase()}-${identity.city
-      .replace(/\s+/g, "-")
-      .toLowerCase()}-${identity.stateCode.toLowerCase()}`
-    const searchUrl = `https://www.fastpeoplesearch.com/name/${encodeURIComponent(slug)}`
-    await page.goto(searchUrl, { waitUntil: "domcontentloaded" })
+    // Drive the homepage name form (verified 2026-08: form#form-search-name
+    // with #search-name-name + #search-name-address).
+    await page.goto("https://www.fastpeoplesearch.com", { waitUntil: "domcontentloaded" })
     await page.waitForTimeout(4_000)
 
-    // Result cards link to /name/... profile pages.
-    const anchors = page.locator('a[href*="/name/"]')
-    const count = Math.min(await anchors.count(), 30)
+    const nameBox = await firstVisible(page, [
+      "#search-name-name", // live selector
+      'form#form-search-name input[name="name"]',
+      'input[aria-label*="first and last name" i]',
+    ])
+    if (!nameBox) throw new Error("FastPeopleSearch scan: name box not found")
+    await nameBox.fill(identity.fullName)
+
+    const locBox = await firstVisible(page, [
+      "#search-name-address", // live selector
+      'form#form-search-name input[name="address"]',
+    ])
+    if (locBox) await locBox.fill(`${identity.city}, ${identity.stateCode}`)
+
+    const goBtn = await firstVisible(page, [
+      'form#form-search-name button[type="submit"]',
+      'form#form-search-name button',
+    ])
+    if (goBtn) {
+      await goBtn.click()
+    } else {
+      await nameBox.press("Enter")
+    }
+    await page.waitForTimeout(5_000)
+
+    // Collect person-profile links. FPS profiles (verified 2026-08) are
+    // ROOT-level paths like /john-smith_id_G-8653115056365742102 — never
+    // /name/... search pages, /address/... pages, or /page/N pagination.
+    const anchors = page.locator("a")
+    const count = Math.min(await anchors.count(), 300)
     const urls: string[] = []
 
     for (let i = 0; i < count; i++) {
       const href = await anchors.nth(i).getAttribute("href")
       if (!href) continue
       const url = href.startsWith("http") ? href : `https://www.fastpeoplesearch.com${href}`
-      const wanted = identity.fullName.toLowerCase().replace(/\s+/g, "-")
-      if (url.toLowerCase().includes(wanted)) urls.push(url)
+      const m = url.match(/^https:\/\/www\.fastpeoplesearch\.com\/([a-z0-9-]+)_id_G-?\d+$/i)
+      if (!m) continue
+      if (!isPersonProfileSlug(m[1], identity)) continue
+      urls.push(url)
     }
 
     for (const url of [...new Set(urls)].slice(0, 5)) {
