@@ -180,6 +180,7 @@ export async function confirmOptOutEmail(listingId: string, confirmationUrl: str
     store.updateSubmission(sub.id, {
       status: "confirmed",
       confirmSessionId: evidence.sessionId,
+      confirmEvidenceDir: evidence.evidenceDir,
     })
   } catch (err) {
     store.updateSubmission(sub.id, {

@@ -18,7 +18,9 @@ import type {
   SubmissionStatus,
 } from "@/types"
 
-const DATA_DIR = join(process.cwd(), "data")
+// PJ_DATA_DIR lets tests (scripts/smoke) point the store at a temp dir
+// without touching the user's real database.
+const DATA_DIR = process.env.PJ_DATA_DIR ?? join(process.cwd(), "data")
 const DB_PATH = join(DATA_DIR, "privacy-janitor.db")
 
 // Singleton across Next.js dev hot reloads.
@@ -89,6 +91,28 @@ function migrate(db: DatabaseSync): void {
       created_at TEXT NOT NULL
     );
   `)
+
+  // ── migrations for pre-existing databases ─────────────────────────────────
+  // Additive columns only; wrapped in try/catch because ALTER TABLE throws
+  // if the column already exists (node:sqlite has no IF NOT EXISTS).
+  const migrations: Array<[string, string]> = [
+    ["submissions", "ALTER TABLE submissions ADD COLUMN confirm_evidence_dir TEXT"],
+  ]
+  for (const [table, sql] of migrations) {
+    try {
+      db.exec(sql)
+    } catch {
+      // column already present
+    }
+  }
+}
+
+/** Close the singleton DB handle (tests/CLI exit cleanly on Windows). */
+export function closeDb(): void {
+  if (g.__pjDb) {
+    g.__pjDb.close()
+    g.__pjDb = undefined
+  }
 }
 
 export function newId(prefix: string): string {
@@ -142,6 +166,128 @@ function rowToIdentity(r: Record<string, unknown>): Identity {
     ageRange: (r.age_range as string) ?? undefined,
     relatives: r.relatives ? JSON.parse(r.relatives as string) : undefined,
     createdAt: r.created_at as string,
+  }
+}
+
+/**
+ * Transactional identity deletion. Removes the identity, its listings,
+ * submissions, prepared opt-outs, and scan runs in ONE transaction — the
+ * database never ends up half-deleted. Returns the evidence directories
+ * (screenshot folders) the caller should remove from disk after the
+ * transaction commits, keyed by listing id.
+ */
+export function deleteIdentity(identityId: string): string[] {
+  const db = open()
+  const evidenceDirs: string[] = []
+
+  db.exec("BEGIN")
+  try {
+    const listings = db
+      .prepare("SELECT id FROM listings WHERE identity_id = ?")
+      .all(identityId) as Array<{ id: string }>
+
+    for (const { id } of listings) {
+      // collect evidence paths + prepared state before deleting rows
+      const sub = db
+        .prepare(
+          "SELECT preview_screenshot_path, result_screenshot_path, confirm_evidence_dir FROM submissions WHERE listing_id = ?",
+        )
+        .get(id) as Record<string, unknown> | undefined
+      if (sub) {
+        for (const k of ["preview_screenshot_path", "result_screenshot_path", "confirm_evidence_dir"]) {
+          const p = sub[k] as string | null
+          if (p) evidenceDirs.push(p)
+        }
+      }
+      const prepared = db
+        .prepare("SELECT state FROM prepared_optouts WHERE listing_id = ?")
+        .get(id) as { state?: string } | undefined
+      if (prepared?.state) {
+        try {
+          const state = JSON.parse(prepared.state) as Record<string, string>
+          if (state.previewPath) evidenceDirs.push(state.previewPath)
+          if (state.sessionEvidenceDir) evidenceDirs.push(state.sessionEvidenceDir)
+        } catch {
+          /* malformed state — nothing to collect */
+        }
+      }
+      db.prepare("DELETE FROM submissions WHERE listing_id = ?").run(id)
+      db.prepare("DELETE FROM prepared_optouts WHERE listing_id = ?").run(id)
+    }
+
+    // listing-level evidence dirs (scan screenshots)
+    const listingDirs = db
+      .prepare("SELECT screenshot_path FROM listings WHERE identity_id = ?")
+      .all(identityId) as Array<{ screenshot_path: string | null }>
+    for (const row of listingDirs) {
+      if (row.screenshot_path) evidenceDirs.push(row.screenshot_path)
+    }
+
+    db.prepare("DELETE FROM listings WHERE identity_id = ?").run(identityId)
+    db.prepare("DELETE FROM scan_runs WHERE identity_id = ?").run(identityId)
+    const res = db.prepare("DELETE FROM identities WHERE id = ?").run(identityId)
+    if (res.changes === 0) throw new Error(`identity ${identityId} not found`)
+
+    db.exec("COMMIT")
+    return evidenceDirs
+  } catch (err) {
+    db.exec("ROLLBACK")
+    throw err
+  }
+}
+
+/**
+ * Full factory reset: drop every identity, listing, submission, run, and
+ * prepared opt-out in one transaction. Returns all evidence dirs + the DB
+ * path itself (caller deletes data/ wholesale).
+ */
+export function resetAll(): { evidenceDirs: string[] } {
+  const db = open()
+  const evidenceDirs: string[] = []
+
+  db.exec("BEGIN")
+  try {
+    const listings = db.prepare("SELECT id, screenshot_path FROM listings").all() as Array<{
+      id: string
+      screenshot_path: string | null
+    }>
+    for (const l of listings) {
+      if (l.screenshot_path) evidenceDirs.push(l.screenshot_path)
+      const sub = db
+        .prepare(
+          "SELECT preview_screenshot_path, result_screenshot_path, confirm_evidence_dir FROM submissions WHERE listing_id = ?",
+        )
+        .get(l.id) as Record<string, unknown> | undefined
+      if (sub) {
+        for (const k of ["preview_screenshot_path", "result_screenshot_path", "confirm_evidence_dir"]) {
+          const p = sub[k] as string | null
+          if (p) evidenceDirs.push(p)
+        }
+      }
+      const prepared = db.prepare("SELECT state FROM prepared_optouts WHERE listing_id = ?").get(l.id) as
+        | { state?: string }
+        | undefined
+      if (prepared?.state) {
+        try {
+          const state = JSON.parse(prepared.state) as Record<string, string>
+          if (state.previewPath) evidenceDirs.push(state.previewPath)
+          if (state.sessionEvidenceDir) evidenceDirs.push(state.sessionEvidenceDir)
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
+    db.exec("DELETE FROM submissions")
+    db.exec("DELETE FROM prepared_optouts")
+    db.exec("DELETE FROM listings")
+    db.exec("DELETE FROM scan_runs")
+    db.exec("DELETE FROM identities")
+    db.exec("COMMIT")
+    return { evidenceDirs }
+  } catch (err) {
+    db.exec("ROLLBACK")
+    throw err
   }
 }
 
@@ -250,6 +396,7 @@ export function updateSubmission(
   patch: Partial<Pick<Submission, "status">> & {
     submitSessionId?: string
     confirmSessionId?: string
+    confirmEvidenceDir?: string
     previewScreenshotPath?: string
     resultScreenshotPath?: string
     removedVerifiedAt?: string
@@ -269,6 +416,7 @@ export function updateSubmission(
          status = ?, updated_at = ?,
          submit_session_id = ?,
          confirm_session_id = ?,
+         confirm_evidence_dir = ?,
          preview_screenshot_path = ?,
          result_screenshot_path = ?,
          removed_verified_at = ?,
@@ -281,6 +429,7 @@ export function updateSubmission(
       new Date().toISOString(),
       patch.submitSessionId ?? (cur.submit_session_id as string | null) ?? null,
       patch.confirmSessionId ?? (cur.confirm_session_id as string | null) ?? null,
+      patch.confirmEvidenceDir ?? (cur.confirm_evidence_dir as string | null) ?? null,
       patch.previewScreenshotPath ?? (cur.preview_screenshot_path as string | null) ?? null,
       patch.resultScreenshotPath ?? (cur.result_screenshot_path as string | null) ?? null,
       patch.removedVerifiedAt ?? (cur.removed_verified_at as string | null) ?? null,

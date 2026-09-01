@@ -29,6 +29,9 @@ export default function Home() {
   const [report, setReport] = useState<ExposureReport | null>(null)
   const [contactEmail, setContactEmail] = useState("")
   const [confirmUrl, setConfirmUrl] = useState<Record<string, string>>({})
+  const [activeIdentityId, setActiveIdentityId] = useState<string | null>(null)
+  const [showIdentityForm, setShowIdentityForm] = useState(false)
+  const [editingIdentity, setEditingIdentity] = useState<Identity | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refresh = useCallback(async () => {
@@ -39,6 +42,13 @@ export default function Home() {
   useEffect(() => {
     void refresh()
   }, [refresh])
+
+  // Default to first identity when none is selected.
+  useEffect(() => {
+    if (!activeIdentityId && state?.identities.length) {
+      setActiveIdentityId(state.identities[0].id)
+    }
+  }, [state, activeIdentityId])
 
   // Poll while a scan is running so results stream in.
   useEffect(() => {
@@ -97,10 +107,41 @@ export default function Home() {
     }
   }
 
-  const identity = state?.identities[0]
-  const confirmedListings = (state?.listings ?? []).filter((l) => l.confirmedMine === true)
-  const pendingListings = (state?.listings ?? []).filter((l) => l.confirmedMine === null)
-  const activeScan = state?.scans.find((s) => !s.finishedAt)
+  async function deleteIdentity(id: string, name: string) {
+    if (
+      !window.confirm(
+        `Delete profile "${name}"?\n\nThis permanently removes their listings, submissions, and all local evidence screenshots. Broker-side opt-outs already submitted stay submitted.`,
+      )
+    )
+      return
+    await stateAction({ action: "delete-identity", identityId: id }, `del-${id}`)
+    if (activeIdentityId === id) {
+      setActiveIdentityId(null)
+      setReport(null)
+    }
+  }
+
+  async function resetAll() {
+    if (
+      !window.confirm(
+        "Reset EVERYTHING?\n\nAll profiles, listings, submissions, and evidence are permanently deleted. This cannot be undone.",
+      )
+    )
+      return
+    await stateAction({ action: "reset-all" }, "reset")
+    setActiveIdentityId(null)
+    setReport(null)
+  }
+
+  const identity = state?.identities.find((i) => i.id === activeIdentityId) ?? null
+  const scopedListings = (state?.listings ?? []).filter((l) => l.identityId === activeIdentityId)
+  const scopedSubmissions = (state?.submissions ?? []).filter((s) =>
+    scopedListings.some((l) => l.id === s.listingId),
+  )
+  const scopedScans = (state?.scans ?? []).filter((s) => s.identityId === activeIdentityId)
+  const confirmedListings = scopedListings.filter((l) => l.confirmedMine === true)
+  const pendingListings = scopedListings.filter((l) => l.confirmedMine === null)
+  const activeScan = scopedScans.find((s) => !s.finishedAt)
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10 space-y-10">
@@ -109,9 +150,9 @@ export default function Home() {
           Privacy<span className="text-emerald-400">Janitor</span>
         </h1>
         <p className="text-zinc-400 text-sm">
-          Local-first data-broker removal agent. Your data lives in{" "}
-          <code className="text-zinc-300">data/privacy-janitor.db</code> on this machine — nowhere
-          else. Nothing is submitted anywhere without your approval.
+          Local-first data-broker removal agent. All data lives in{" "}
+          <code className="text-zinc-300">data/</code> on this machine. Nothing is submitted
+          anywhere without your approval.
         </p>
       </header>
 
@@ -121,52 +162,147 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── Step 1: identity ─────────────────────────────────────────── */}
+      {/* ── Profile bar ─────────────────────────────────────────────── */}
       <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-4">
-        <h2 className="font-semibold text-lg">1. Who are we scrubbing?</h2>
-        {identity ? (
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <p className="text-sm text-zinc-300">
-              <span className="font-medium">{identity.fullName}</span> · {identity.city},{" "}
-              {identity.stateCode}
-              {identity.ageRange ? ` · ${identity.ageRange}` : ""}
-            </p>
-            <div className="flex gap-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="font-semibold text-lg">Profiles</h2>
+          <div className="flex gap-2">
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                setEditingIdentity(null)
+                setShowIdentityForm((v) => !v)
+              }}
+            >
+              + Add profile
+            </button>
+            {identity && (
               <button
-                className="btn-primary"
-                disabled={!!busy || !identity}
-                onClick={() => void stateAction({ action: "scan", identityId: identity.id }, "scan")}
+                className="btn-secondary"
+                onClick={() => {
+                  setEditingIdentity(identity)
+                  setShowIdentityForm(true)
+                }}
               >
-                {activeScan ? "Scanning…" : busy === "scan" ? "Starting…" : "Run broker scan"}
+                Edit
               </button>
-            </div>
+            )}
+            {identity && (
+              <button
+                className="btn-danger"
+                disabled={!!busy}
+                onClick={() => void deleteIdentity(identity.id, identity.fullName)}
+              >
+                Delete profile
+              </button>
+            )}
+            {state && (state.identities.length > 0 || state.listings.length > 0) && (
+              <button className="btn-danger" disabled={!!busy} onClick={() => void resetAll()}>
+                Reset all
+              </button>
+            )}
           </div>
-        ) : (
+        </div>
+
+        {/* profile selector */}
+        {state && state.identities.length > 0 && (
+          <div className="flex gap-2 flex-wrap">
+            {state.identities.map((i) => (
+              <button
+                key={i.id}
+                onClick={() => {
+                  setActiveIdentityId(i.id)
+                  setReport(null)
+                }}
+                className={
+                  i.id === activeIdentityId
+                    ? "rounded-lg border border-emerald-600 bg-emerald-950/60 px-4 py-2 text-sm font-medium"
+                    : "rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-500"
+                }
+              >
+                {i.fullName}
+                <span className="text-zinc-500">
+                  {" "}
+                  · {i.city}, {i.stateCode}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {(showIdentityForm || state?.identities.length === 0) && (
           <IdentityForm
+            key={editingIdentity?.id ?? "new"}
+            existing={editingIdentity}
+            onCancel={
+              state?.identities.length
+                ? () => {
+                    setShowIdentityForm(false)
+                    setEditingIdentity(null)
+                  }
+                : undefined
+            }
             onSave={async (i) => {
-              await stateAction({ action: "save-identity", identity: i }, "identity")
+              const res = await stateAction(
+                { action: "save-identity", identity: i },
+                "identity",
+              )
+              if (res?.identity) {
+                setActiveIdentityId(res.identity.id as string)
+                setReport(null)
+              }
+              setShowIdentityForm(false)
+              setEditingIdentity(null)
             }}
           />
         )}
-        {activeScan && (
-          <p className="text-xs text-zinc-500">
-            Scan running against all brokers — pages stream in below as each finishes (polling
-            every 4s).
+
+        {state?.identities.length === 0 && (
+          <p className="text-sm text-zinc-400">
+            No profiles yet — add the person whose data-broker listings you want to find and
+            remove. (You can manage multiple people: yourself, family members with their
+            consent, etc.)
           </p>
         )}
       </section>
 
-      {/* ── Step 2: disambiguation ───────────────────────────────────── */}
-      {pendingListings.length > 0 && (
+      {/* ── Scan ────────────────────────────────────────────────────── */}
+      {identity && (
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-3">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h2 className="font-semibold text-lg">Scan for {identity.fullName}</h2>
+              <p className="text-sm text-zinc-400">
+                Searches all brokers for this profile&apos;s data.
+              </p>
+            </div>
+            <button
+              className="btn-primary"
+              disabled={!!busy || !identity}
+              onClick={() => void stateAction({ action: "scan", identityId: identity.id }, "scan")}
+            >
+              {activeScan ? "Scanning…" : busy === "scan" ? "Starting…" : "Run broker scan"}
+            </button>
+          </div>
+          {activeScan && (
+            <p className="text-xs text-zinc-500">
+              Scan running — results stream in below as each broker finishes (polling every 4s).
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* ── Disambiguation ───────────────────────────────────────────── */}
+      {identity && pendingListings.length > 0 && (
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-4">
-          <h2 className="font-semibold text-lg">2. Is this you?</h2>
+          <h2 className="font-semibold text-lg">Is this {identity.fullName}?</h2>
           <p className="text-sm text-zinc-400">
             Confirm each listing before anything is removed — namesakes are common and wrong
-            removals are irreversible trouble.
+            removals cause real trouble.
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             {pendingListings.map((l) => (
-              <ListingCard key={l.id} listing={l} store={state} mode="disambiguate"
+              <ListingCard key={l.id} listing={l}
                 onConfirm={() => void stateAction({ action: "confirm-listing", listingId: l.id }, `c-${l.id}`)}
                 onReject={() => void stateAction({ action: "reject-listing", listingId: l.id }, `c-${l.id}`)}
               />
@@ -175,17 +311,15 @@ export default function Home() {
         </section>
       )}
 
-      {/* ── Step 3: exposure score ───────────────────────────────────── */}
-      {confirmedListings.length > 0 && (
+      {/* ── Exposure score ──────────────────────────────────────────── */}
+      {identity && confirmedListings.length > 0 && (
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <h2 className="font-semibold text-lg">3. Exposure score</h2>
+            <h2 className="font-semibold text-lg">Exposure score</h2>
             <button
               className="btn-primary"
               disabled={!!busy}
-              onClick={() =>
-                void action({ action: "score", identityId: identity?.id }, "score")
-              }
+              onClick={() => void action({ action: "score", identityId: identity.id }, "score")}
             >
               {busy === "score" ? "Scoring (redacted, via Groq)…" : "Rank my exposure"}
             </button>
@@ -214,23 +348,23 @@ export default function Home() {
                 })}
               </div>
               <p className="text-xs text-zinc-500">
-                LLM saw tokenized placeholders only ([NAME_1], [ADDR_1] …) — no real PII left this
-                machine.
+                LLM saw tokenized placeholders only ([NAME_1], [ADDR_1] …) — no real PII left
+                this machine.
               </p>
             </div>
           ) : (
             <p className="text-sm text-zinc-400">
-              {confirmedListings.length} confirmed listing(s). Rank them by risk to know which to
-              kill first (optional — requires GROQ_API_KEY).
+              {confirmedListings.length} confirmed listing(s) for {identity.fullName}. Rank them
+              by risk to know which to kill first (optional — requires GROQ_API_KEY).
             </p>
           )}
         </section>
       )}
 
-      {/* ── Step 4: opt-out queue ────────────────────────────────────── */}
-      {confirmedListings.length > 0 && (
+      {/* ── Opt-out queue ────────────────────────────────────────────── */}
+      {identity && confirmedListings.length > 0 && (
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-4">
-          <h2 className="font-semibold text-lg">4. Opt-out queue</h2>
+          <h2 className="font-semibold text-lg">Opt-out queue</h2>
           <div className="flex items-center gap-3 flex-wrap text-sm">
             <label className="text-zinc-400">
               Contact email brokers will see:
@@ -245,7 +379,7 @@ export default function Home() {
           </div>
           <div className="space-y-3">
             {confirmedListings.map((l) => {
-              const sub = (state?.submissions ?? []).find((s) => s.listingId === l.id)
+              const sub = scopedSubmissions.find((s) => s.listingId === l.id)
               return (
                 <OptOutRow
                   key={l.id}
@@ -266,29 +400,30 @@ export default function Home() {
         </section>
       )}
 
-      {/* ── Step 5: rescan ───────────────────────────────────────────── */}
-      {confirmedListings.length > 0 && (
+      {/* ── Rescan ──────────────────────────────────────────────────── */}
+      {identity && confirmedListings.length > 0 && (
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-3">
-          <h2 className="font-semibold text-lg">5. Verify removals</h2>
+          <h2 className="font-semibold text-lg">Verify removals</h2>
           <p className="text-sm text-zinc-400">
-            Brokers relist data. Re-run the scan after a few days — the diff shows removed,
-            still-listed, and relisted records. (Re-scan button runs the same flow as Step 1.)
+            Brokers relist data. Re-run the scan after a few days — removed listings that
+            reappear get flagged.
           </p>
           <button
             className="btn-secondary"
-            disabled={!!busy || !identity}
-            onClick={() => void stateAction({ action: "scan", identityId: identity?.id }, "scan")}
+            disabled={!!busy}
+            onClick={() => void stateAction({ action: "scan", identityId: identity.id }, "scan")}
           >
             Re-scan & diff
           </button>
         </section>
       )}
 
-      {state && state.scans.length > 0 && (
+      {/* ── Scan history (scoped) ─────────────────────────────────────── */}
+      {identity && scopedScans.length > 0 && (
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-3">
-          <h2 className="font-semibold text-lg">Scan history</h2>
+          <h2 className="font-semibold text-lg">Scan history — {identity.fullName}</h2>
           <div className="space-y-2 text-sm">
-            {[...state.scans].reverse().map((s) => (
+            {[...scopedScans].reverse().map((s) => (
               <div key={s.id} className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
                 <div className="text-zinc-300">
                   {new Date(s.startedAt).toLocaleString()} —{" "}
@@ -310,11 +445,20 @@ export default function Home() {
   )
 }
 
-function IdentityForm({ onSave }: { onSave: (i: Partial<Identity>) => Promise<void> }) {
-  const [fullName, setFullName] = useState("")
-  const [city, setCity] = useState("")
-  const [stateCode, setStateCode] = useState("")
-  const [ageRange, setAgeRange] = useState("")
+function IdentityForm({
+  existing,
+  onSave,
+  onCancel,
+}: {
+  existing: Identity | null
+  onSave: (i: Partial<Identity>) => Promise<void>
+  onCancel?: () => void
+}) {
+  const [fullName, setFullName] = useState(existing?.fullName ?? "")
+  const [city, setCity] = useState(existing?.city ?? "")
+  const [stateCode, setStateCode] = useState(existing?.stateCode ?? "")
+  const [ageRange, setAgeRange] = useState(existing?.ageRange ?? "")
+  const [relatives, setRelatives] = useState(existing?.relatives?.join(", ") ?? "")
   const [saving, setSaving] = useState(false)
 
   return (
@@ -323,7 +467,17 @@ function IdentityForm({ onSave }: { onSave: (i: Partial<Identity>) => Promise<vo
       onSubmit={async (e) => {
         e.preventDefault()
         setSaving(true)
-        await onSave({ fullName, city, stateCode, ageRange: ageRange || undefined })
+        await onSave({
+          id: existing?.id,
+          createdAt: existing?.createdAt,
+          fullName,
+          city,
+          stateCode,
+          ageRange: ageRange || undefined,
+          relatives: relatives
+            ? relatives.split(",").map((r) => r.trim()).filter(Boolean)
+            : undefined,
+        })
         setSaving(false)
       }}
     >
@@ -331,19 +485,30 @@ function IdentityForm({ onSave }: { onSave: (i: Partial<Identity>) => Promise<vo
       <input className="input-std" placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} required />
       <input className="input-std" placeholder="State code (e.g. WA)" maxLength={2} value={stateCode} onChange={(e) => setStateCode(e.target.value)} required />
       <input className="input-std" placeholder="Age range (optional, e.g. 25-30)" value={ageRange} onChange={(e) => setAgeRange(e.target.value)} />
-      <button className="btn-primary sm:col-span-2" disabled={saving || !fullName || !city || !stateCode}>
-        {saving ? "Saving…" : "Save & scan-ready"}
-      </button>
+      <input
+        className="input-std sm:col-span-2"
+        placeholder="Relatives (optional, comma-separated — improves match accuracy)"
+        value={relatives}
+        onChange={(e) => setRelatives(e.target.value)}
+      />
+      <div className="flex gap-2 sm:col-span-2">
+        <button className="btn-primary" disabled={saving || !fullName || !city || !stateCode}>
+          {saving ? "Saving…" : existing ? "Save changes" : "Add profile"}
+        </button>
+        {onCancel && (
+          <button type="button" className="btn-secondary" onClick={onCancel}>
+            Cancel
+          </button>
+        )}
+      </div>
     </form>
   )
 }
 
 function ListingCard({
-  listing, store, mode, onConfirm, onReject,
+  listing, onConfirm, onReject,
 }: {
   listing: Listing
-  store: StateResponse | null
-  mode: "disambiguate" | "queue"
   onConfirm?: () => void
   onReject?: () => void
 }) {
@@ -359,32 +524,14 @@ function ListingCard({
       <a href={listing.url} target="_blank" className="link-std block truncate">
         {listing.url}
       </a>
-      {mode === "disambiguate" && (
+      {onConfirm && onReject && (
         <div className="flex gap-2 pt-1">
           <button className="btn-primary" onClick={onConfirm}>This is me</button>
           <button className="btn-secondary" onClick={onReject}>Not me</button>
         </div>
       )}
-      {listing.screenshotPath && mode === "disambiguate" && (
-        <EvidenceImage path={listing.screenshotPath} />
-      )}
-      <span className="sr-only">{store?.identities.length ?? 0}</span>
     </div>
   )
-}
-
-function EvidenceImage({ path }: { path: string }) {
-  const [src, setSrc] = useState<string | null>(null)
-  useEffect(() => {
-    // Path may be a directory (scan evidence) — try the standard file name.
-    const file = path.replace(/\\/g, "/").endsWith(".png")
-      ? path.replace(/\\/g, "/")
-      : `${path.replace(/\\/g, "/")}/scan-result.png`
-    setSrc(`/api/evidence?file=${encodeURIComponent(file)}`)
-  }, [path])
-  if (!src) return null
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt="listing evidence" className="mt-2 rounded border border-zinc-800 max-h-64 w-full object-cover object-top" />
 }
 
 function OptOutRow({
@@ -416,7 +563,6 @@ function OptOutRow({
 
       {sub?.lastError && <div className="text-red-400 text-xs">{sub.lastError}</div>}
 
-      {/* preview evidence after prepare */}
       {sub?.previewScreenshotPath && (
         <div className="space-y-1">
           <p className="text-zinc-400">Filled form preview — approve before we submit:</p>

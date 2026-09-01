@@ -9,6 +9,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "smoke": "node --experimental-strip-types scripts/smoke.mts",
+    "smoke:store": "node --experimental-strip-types scripts/smoke-store.mts",
     "scan": "node scripts/scan.mjs"
   },
   "dependencies": {
