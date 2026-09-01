@@ -26,6 +26,19 @@ those requests. PrivacyJanitor sends them for you, from your own machine, for fr
 > **Nothing is ever sent to a broker without your explicit click.** You get a screenshot of the
 > filled form *before* it is submitted, and a session replay link *after*.
 
+## See it running
+
+The screenshots below use the fictional profile **Jordan Example**. No real user data or live
+broker results are included in these repository images.
+
+![PrivacyJanitor dashboard showing the fictional Jordan Example profile](docs/images/dashboard-demo.png)
+
+<p align="center"><sub><strong>One local dashboard</strong> for profiles, broker scans, approvals, and removal status.</sub></p>
+
+![PrivacyJanitor consent-based profile form filled with fictional demo data](docs/images/profile-form-demo.png)
+
+<p align="center"><sub><strong>Clear profile setup</strong> with explicit consent before any person is added.</sub></p>
+
 ## How it works
 
 ```mermaid
@@ -50,8 +63,9 @@ evidence into `data/evidence/` alongside a replay URL.
   proxy.
 - 🙋 **Namesake filtering** — fact-based URL filters plus fuzzy name-slug matching narrow the
   hits; you confirm each one before it enters the queue.
-- 📊 **Risk ranking that can't leak** — each listing gets a 0–100 exposure score and a
-  plain-language rationale. Your PII is tokenized *before* the prompt leaves the machine.
+- 📊 **Privacy-conscious risk ranking** — each listing gets a 0–100 exposure score and a
+  plain-language rationale. Direct identifiers are tokenized before optional Groq scoring;
+  coarse city/state context may also be included.
 - ✋ **A hard approval gate** — forms are filled, screenshotted, and parked. Nothing submits
   until you click approve.
 - 🧾 **Evidence for every action** — full-page screenshots on disk plus a Solari session replay
@@ -112,12 +126,12 @@ recorded, so every removal has replayable evidence.
 |------|----------------|
 | Your identity, listings, submissions | `data/privacy-janitor.db` (local SQLite) |
 | Evidence screenshots | `data/evidence/` (local files) |
-| Your PII in LLM prompts | **Never** — values are tokenized (`[NAME_1]`, `[ADDR_1]`) before any Groq call; see `src/scoring/redact.ts` |
+| Data sent for optional LLM scoring | Direct identifiers are tokenized (`[NAME_1]`, `[ADDR_1]`); coarse city/state context may also be included. See `src/scoring/redact.ts` |
 | Accounts, telemetry, backend | **None.** It's a localhost web app |
 
-The model only ever sees the *structure* of your exposure — *"[NAME_1] appears on Broker B with
-[ADDR_1], [PHONE_1] and two relatives"* — enough to reason about risk, nothing to re-identify.
-Tokens are mapped back locally at render time.
+The model receives the tokenized *structure* of your exposure — *"[NAME_1] appears on Broker B
+with [ADDR_1], [PHONE_1] and two relatives"* — plus coarse location context. Tokens are mapped
+back locally at render time.
 
 ## Development
 
