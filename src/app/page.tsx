@@ -60,7 +60,10 @@ export default function Home() {
       pollRef.current = null
     }
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current)
+      if (pollRef.current) {
+        clearInterval(pollRef.current)
+        pollRef.current = null
+      }
     }
   }, [state, refresh])
 
@@ -144,28 +147,33 @@ export default function Home() {
   const activeScan = scopedScans.find((s) => !s.finishedAt)
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10 space-y-10">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">
-          Privacy<span className="text-emerald-400">Janitor</span>
+    <main className="mx-auto max-w-6xl space-y-8 px-5 py-12 sm:px-8 sm:py-16">
+      <header className="border-b border-white/10 pb-10">
+        <p className="eyebrow mb-4">Local-first privacy workspace</p>
+        <h1 className="text-4xl font-semibold tracking-[-0.04em] sm:text-6xl">
+          Privacy<span className="font-light text-zinc-500">Janitor</span>
         </h1>
-        <p className="text-zinc-400 text-sm">
-          Local-first data-broker removal agent. All data lives in{" "}
-          <code className="text-zinc-300">data/</code> on this machine. Nothing is submitted
-          anywhere without your approval.
+        <p className="mt-4 max-w-2xl text-sm leading-6 text-zinc-500">
+          Profiles, findings, and evidence are saved locally in{" "}
+          <code className="rounded bg-white/5 px-1.5 py-0.5 text-zinc-300">data/</code>.
+          Broker scans run through recorded Solari browser sessions, and nothing is submitted
+          to a broker without your approval.
         </p>
       </header>
 
       {error && (
-        <div className="rounded-lg border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-300">
-          {error}
+        <div className="rounded-xl border border-white/20 bg-white/[0.04] px-4 py-3 text-sm text-zinc-200">
+          <span className="mr-2 font-semibold text-white">Something went wrong.</span>{error}
         </div>
       )}
 
       {/* ── Profile bar ─────────────────────────────────────────────── */}
-      <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-4">
+      <section className="panel space-y-5">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="font-semibold text-lg">Profiles</h2>
+          <div>
+            <p className="eyebrow">01 / Profiles</p>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight">Who are we protecting?</h2>
+          </div>
           <div className="flex gap-2">
             <button
               className="btn-secondary"
@@ -206,7 +214,7 @@ export default function Home() {
 
         {/* profile selector */}
         {state && state.identities.length > 0 && (
-          <div className="flex gap-2 flex-wrap">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {state.identities.map((i) => (
               <button
                 key={i.id}
@@ -216,12 +224,12 @@ export default function Home() {
                 }}
                 className={
                   i.id === activeIdentityId
-                    ? "rounded-lg border border-emerald-600 bg-emerald-950/60 px-4 py-2 text-sm font-medium"
-                    : "rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-500"
+                    ? "rounded-xl border border-white bg-white px-4 py-3 text-left text-sm font-semibold text-black"
+                    : "rounded-xl border border-white/10 bg-black px-4 py-3 text-left text-sm text-zinc-300 transition hover:border-white/40"
                 }
               >
                 {i.fullName}
-                <span className="text-zinc-500">
+                <span className={i.id === activeIdentityId ? "text-black/60" : "text-zinc-600"}>
                   {" "}
                   · {i.city}, {i.stateCode}
                 </span>
@@ -258,7 +266,7 @@ export default function Home() {
         )}
 
         {state?.identities.length === 0 && (
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm leading-6 text-zinc-500">
             No profiles yet — add the person whose data-broker listings you want to find and
             remove. (You can manage multiple people: yourself, family members with their
             consent, etc.)
@@ -268,11 +276,12 @@ export default function Home() {
 
       {/* ── Scan ────────────────────────────────────────────────────── */}
       {identity && (
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-3">
+        <section className="panel space-y-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <h2 className="font-semibold text-lg">Scan for {identity.fullName}</h2>
-              <p className="text-sm text-zinc-400">
+              <p className="eyebrow">02 / Scan</p>
+              <h2 className="mt-1 text-xl font-semibold tracking-tight">Scan for {identity.fullName}</h2>
+              <p className="mt-1 text-sm text-zinc-500">
                 Searches all brokers for this profile&apos;s data.
               </p>
             </div>
@@ -294,9 +303,10 @@ export default function Home() {
 
       {/* ── Disambiguation ───────────────────────────────────────────── */}
       {identity && pendingListings.length > 0 && (
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-4">
-          <h2 className="font-semibold text-lg">Is this {identity.fullName}?</h2>
-          <p className="text-sm text-zinc-400">
+        <section className="panel space-y-4">
+          <p className="eyebrow">03 / Review matches</p>
+          <h2 className="text-xl font-semibold tracking-tight">Is this {identity.fullName}?</h2>
+          <p className="text-sm leading-6 text-zinc-500">
             Confirm each listing before anything is removed — namesakes are common and wrong
             removals cause real trouble.
           </p>
@@ -313,9 +323,12 @@ export default function Home() {
 
       {/* ── Exposure score ──────────────────────────────────────────── */}
       {identity && confirmedListings.length > 0 && (
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-4">
+        <section className="panel space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <h2 className="font-semibold text-lg">Exposure score</h2>
+            <div>
+              <p className="eyebrow">04 / Prioritize</p>
+              <h2 className="mt-1 text-xl font-semibold tracking-tight">Exposure score</h2>
+            </div>
             <button
               className="btn-primary"
               disabled={!!busy}
@@ -328,7 +341,7 @@ export default function Home() {
             <div className="space-y-3">
               <p className="text-sm text-zinc-300">
                 Overall exposure:{" "}
-                <span className="font-bold text-amber-400">{report.totalScore}/100</span>
+                <span className="font-bold text-white">{report.totalScore}/100</span>
                 <span className="text-zinc-500"> · model {report.model}</span>
               </p>
               <p className="text-sm text-zinc-400">{report.summary}</p>
@@ -336,20 +349,20 @@ export default function Home() {
                 {report.rankings.map((r) => {
                   const listing = confirmedListings.find((l) => l.id === r.listingId)
                   return (
-                    <div key={r.listingId} className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-sm space-y-1">
+                    <div key={r.listingId} className="card space-y-1 text-sm">
                       <div className="flex justify-between font-medium">
                         <span>{listing?.displayName} · {r.brokerId}</span>
-                        <span className="text-amber-400">{r.score}/100</span>
+                        <span className="text-white">{r.score}/100</span>
                       </div>
                       <p className="text-zinc-400">{r.rationale}</p>
-                      <p className="text-emerald-400">→ {r.recommendedAction}</p>
+                      <p className="text-zinc-200">→ {r.recommendedAction}</p>
                     </div>
                   )
                 })}
               </div>
               <p className="text-xs text-zinc-500">
-                LLM saw tokenized placeholders only ([NAME_1], [ADDR_1] …) — no real PII left
-                this machine.
+                Optional Groq scoring receives tokenized listing fields plus the profile&apos;s
+                coarse city and state context.
               </p>
             </div>
           ) : (
@@ -363,17 +376,18 @@ export default function Home() {
 
       {/* ── Opt-out queue ────────────────────────────────────────────── */}
       {identity && confirmedListings.length > 0 && (
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-4">
-          <h2 className="font-semibold text-lg">Opt-out queue</h2>
-          <div className="flex items-center gap-3 flex-wrap text-sm">
-            <label className="text-zinc-400">
-              Contact email brokers will see:
+        <section className="panel space-y-4">
+          <p className="eyebrow">05 / Remove</p>
+          <h2 className="text-xl font-semibold tracking-tight">Opt-out queue</h2>
+          <div className="max-w-md text-sm">
+            <label className="field-label">
+              Contact email brokers will see
               <input
                 type="email"
                 value={contactEmail}
                 onChange={(e) => setContactEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="input-std ml-2"
+                className="input-std"
               />
             </label>
           </div>
@@ -402,9 +416,10 @@ export default function Home() {
 
       {/* ── Rescan ──────────────────────────────────────────────────── */}
       {identity && confirmedListings.length > 0 && (
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-3">
-          <h2 className="font-semibold text-lg">Verify removals</h2>
-          <p className="text-sm text-zinc-400">
+        <section className="panel space-y-3">
+          <p className="eyebrow">06 / Verify</p>
+          <h2 className="text-xl font-semibold tracking-tight">Verify removals</h2>
+          <p className="text-sm leading-6 text-zinc-500">
             Brokers relist data. Re-run the scan after a few days — removed listings that
             reappear get flagged.
           </p>
@@ -420,19 +435,20 @@ export default function Home() {
 
       {/* ── Scan history (scoped) ─────────────────────────────────────── */}
       {identity && scopedScans.length > 0 && (
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-3">
-          <h2 className="font-semibold text-lg">Scan history — {identity.fullName}</h2>
+        <section className="panel space-y-3">
+          <p className="eyebrow">Activity</p>
+          <h2 className="text-xl font-semibold tracking-tight">Scan history — {identity.fullName}</h2>
           <div className="space-y-2 text-sm">
             {[...scopedScans].reverse().map((s) => (
-              <div key={s.id} className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+              <div key={s.id} className="card">
                 <div className="text-zinc-300">
                   {new Date(s.startedAt).toLocaleString()} —{" "}
                   {s.finishedAt ? `${s.results.length} broker(s) done` : "running…"}
                 </div>
                 <div className="mt-1 space-y-1">
                   {s.results.map((r) => (
-                    <div key={r.brokerId} className={r.ok ? "text-emerald-400" : "text-red-400"}>
-                      {r.brokerId}: {r.ok ? `${r.listingsFound} listing(s)` : `error — ${r.error}`}
+                    <div key={r.brokerId} className={r.ok ? "text-zinc-300" : "text-zinc-500"}>
+                      {r.ok ? "✓" : "×"} {r.brokerId}: {r.ok ? `${r.listingsFound} listing(s)` : `error — ${r.error}`}
                     </div>
                   ))}
                 </div>
@@ -459,11 +475,12 @@ function IdentityForm({
   const [stateCode, setStateCode] = useState(existing?.stateCode ?? "")
   const [ageRange, setAgeRange] = useState(existing?.ageRange ?? "")
   const [relatives, setRelatives] = useState(existing?.relatives?.join(", ") ?? "")
+  const [consent, setConsent] = useState(!!existing)
   const [saving, setSaving] = useState(false)
 
   return (
     <form
-      className="grid gap-3 sm:grid-cols-2"
+      className="grid gap-4 border-t border-white/10 pt-5 sm:grid-cols-2"
       onSubmit={async (e) => {
         e.preventDefault()
         setSaving(true)
@@ -481,18 +498,50 @@ function IdentityForm({
         setSaving(false)
       }}
     >
-      <input className="input-std" placeholder="Full name (First Last)" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-      <input className="input-std" placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} required />
-      <input className="input-std" placeholder="State code (e.g. WA)" maxLength={2} value={stateCode} onChange={(e) => setStateCode(e.target.value)} required />
-      <input className="input-std" placeholder="Age range (optional, e.g. 25-30)" value={ageRange} onChange={(e) => setAgeRange(e.target.value)} />
-      <input
-        className="input-std sm:col-span-2"
-        placeholder="Relatives (optional, comma-separated — improves match accuracy)"
-        value={relatives}
-        onChange={(e) => setRelatives(e.target.value)}
-      />
+      <label className="field-label">
+        Full name
+        <input className="input-std" placeholder="First Last" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+      </label>
+      <label className="field-label">
+        City
+        <input className="input-std" placeholder="Chicago" value={city} onChange={(e) => setCity(e.target.value)} required />
+      </label>
+      <label className="field-label">
+        State
+        <input className="input-std" placeholder="IL" maxLength={2} value={stateCode} onChange={(e) => setStateCode(e.target.value)} required />
+      </label>
+      <label className="field-label">
+        Age range <span className="font-normal text-zinc-600">Optional</span>
+        <input className="input-std" placeholder="25-30" value={ageRange} onChange={(e) => setAgeRange(e.target.value)} />
+      </label>
+      <label className="field-label sm:col-span-2">
+        Relatives <span className="font-normal text-zinc-600">Optional, comma-separated</span>
+        <input
+          className="input-std"
+          placeholder="Improves match accuracy"
+          value={relatives}
+          onChange={(e) => setRelatives(e.target.value)}
+        />
+      </label>
+      {!existing && (
+        <label className="flex items-start gap-3 text-xs leading-5 text-zinc-500 sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+            className="mt-1 size-4 accent-white"
+          />
+          I am searching for myself, or I have this person&apos;s permission to manage their
+          broker-removal requests.
+        </label>
+      )}
+      {existing && (
+        <p className="text-xs leading-5 text-zinc-600 sm:col-span-2">
+          If you change the name or location, run a new scan so saved matches can be refreshed.
+        </p>
+      )}
       <div className="flex gap-2 sm:col-span-2">
-        <button className="btn-primary" disabled={saving || !fullName || !city || !stateCode}>
+        <button className="btn-primary" disabled={saving || !fullName || !city || !stateCode || !consent}>
           {saving ? "Saving…" : existing ? "Save changes" : "Add profile"}
         </button>
         {onCancel && (
@@ -514,9 +563,9 @@ function ListingCard({
 }) {
   const e = listing.exposedData
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 space-y-2 text-sm">
-      <div className="font-medium">{listing.displayName}</div>
-      <div className="text-zinc-400">{listing.brokerId}</div>
+    <div className="card space-y-2 text-sm">
+      <div className="font-semibold tracking-tight">{listing.displayName}</div>
+      <div className="eyebrow">{listing.brokerId}</div>
       {e.addresses?.length ? <div>📍 {e.addresses.slice(0, 2).join(" · ")}</div> : null}
       {e.phones?.length ? <div>📞 {e.phones.slice(0, 2).join(" · ")}</div> : null}
       {e.age ? <div>👤 age {e.age}</div> : null}
@@ -550,18 +599,18 @@ function OptOutRow({
   onConfirmEmail: () => void
 }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 space-y-3 text-sm">
+    <div className="card space-y-3 text-sm">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <div className="font-medium">{listing.displayName}</div>
           <div className="text-zinc-400">{listing.brokerId}</div>
         </div>
-        <div className={sub?.status === "failed" ? "text-red-400" : sub?.status === "removed" ? "text-emerald-400" : "text-zinc-400"}>
+        <div className={sub?.status === "failed" ? "text-zinc-500" : sub?.status === "removed" ? "text-white" : "text-zinc-400"}>
           {sub ? statusLabel[sub.status] : "Not started"}
         </div>
       </div>
 
-      {sub?.lastError && <div className="text-red-400 text-xs">{sub.lastError}</div>}
+      {sub?.lastError && <div className="border-l border-white/30 pl-3 text-xs text-zinc-400">{sub.lastError}</div>}
 
       {sub?.previewScreenshotPath && (
         <div className="space-y-1">
@@ -570,7 +619,7 @@ function OptOutRow({
           <img
             src={`/api/evidence?file=${encodeURIComponent(sub.previewScreenshotPath.replace(/\\/g, "/"))}`}
             alt="opt-out form preview"
-            className="rounded border border-zinc-800 max-h-96 w-full object-cover object-top"
+            className="max-h-96 w-full rounded-lg border border-white/10 object-cover object-top"
           />
         </div>
       )}
@@ -617,7 +666,7 @@ function OptOutRow({
           <img
             src={`/api/evidence?file=${encodeURIComponent(sub.resultScreenshotPath.replace(/\\/g, "/"))}`}
             alt="opt-out result"
-            className="rounded border border-zinc-800 max-h-96 w-full object-cover object-top"
+            className="max-h-96 w-full rounded-lg border border-white/10 object-cover object-top"
           />
         </div>
       )}

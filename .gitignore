@@ -8,10 +8,9 @@ next-env.d.ts
 *.tsbuildinfo
 .turbo/
 
-# secrets — never commit
-.env
-.env.local
-.env.*.local
+# secrets — never commit any environment file; keep the documented template
+.env*
+!.env.example
 
 # local data: sqlite db, evidence screenshots, solari replays
 data/
