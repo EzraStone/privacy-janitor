@@ -156,7 +156,8 @@ export interface BrokerLocator {
   click(): Promise<void>
   fill(value: string): Promise<void>
   type(text: string): Promise<void>
-  selectOption(value: string): Promise<void>
+  /** Accepts a value string or Playwright-style {label}/{value}/{index}. */
+  selectOption(option: string | { label?: string; value?: string; index?: number }): Promise<void>
   press(key: string): Promise<void>
   first(): BrokerLocator
   nth(index: number): BrokerLocator

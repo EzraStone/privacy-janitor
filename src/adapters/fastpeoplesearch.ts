@@ -154,70 +154,46 @@ export const fastpeoplesearch: BrokerAdapter = {
     )
   },
 
-  // ┒ opt-out: prepare ──────────────────────────────────────────────────────
+  // ── opt-out: prepare ──────────────────────────────────────────────────────
 
   async prepareOptOut(page, listing, identity, contactEmail): Promise<FilledOptOutForm> {
+    // Verified 2026-08: /removal is a direct request form — role select
+    // ("The subject of this request"), subject name, requester email,
+    // legal checkbox, Turnstile captcha (auto-solved by Solari).
     await page.goto(REMOVAL_URL, { waitUntil: "domcontentloaded" })
-    await page.waitForTimeout(2_500)
+    await page.waitForTimeout(3_000)
 
-    // Start the removal wizard without a code.
-    const noCode = await firstVisible(page, [
-      'a:has-text("No, I don\'t have a code")',
-      'button:has-text("No")',
-      'a:has-text("search for your record")',
-    ])
-    if (noCode) {
-      await noCode.click()
-      await page.waitForTimeout(2_000)
-    }
-
-    // Search for our record by name.
-    const nameInput = await firstVisible(page, [
-      'input[name="name"]',
-      'input[placeholder*="First and last name" i]',
-      'input[placeholder*="name" i]',
-      'input[type="text"]',
-    ])
-    if (nameInput) {
-      await nameInput.fill(identity.fullName)
-      const goBtn = await firstVisible(page, [
-        'button:has-text("Search")',
-        'button:has-text("Go")',
-        'input[type="submit"]',
-      ])
-      if (goBtn) {
-        await goBtn.click()
-        await page.waitForTimeout(4_000)
+    // Role: "The subject of this request" (I am the person listed).
+    const role = await firstVisible(page, ['select[name="am"]'])
+    if (role) {
+      try {
+        await role.selectOption({ label: "The subject of this request" })
+      } catch {
+        try {
+          await role.selectOption({ index: 1 })
+        } catch {
+          /* keep going — some variants preselect */
+        }
       }
     }
 
-    // Select the matching record — prefer an exact URL match to our listing.
-    const recordLink = await firstVisible(page, [
-      `a[href*="${listing.url.split("/").pop()}"]`,
-      'a:has-text("Select")',
-      'button:has-text("Select")',
-    ])
-    if (recordLink) {
-      await recordLink.click()
-      await page.waitForTimeout(2_000)
-    }
+    // Subject's name (the person being removed — our identity).
+    const first = await firstVisible(page, ['input#firstname', 'input[name="firstname"]'])
+    const last = await firstVisible(page, ['input#lastname', 'input[name="lastname"]'])
+    if (first) await first.fill(identity.fullName.split(" ")[0])
+    if (last) await last.fill(identity.fullName.split(" ").slice(-1)[0])
 
-    const email = await firstVisible(page, [
-      'input[name="email"]',
-      'input[type="email"]',
-      'input[placeholder*="mail" i]',
-    ])
-    if (email) await email.fill(contactEmail)
+    const email = await firstVisible(page, ['input#email', 'input[name="email"]', 'input[type="email"]'])
+    if (!email) throw new Error("FastPeopleSearch opt-out: email field not found")
+    await email.fill(contactEmail)
 
-    const reason = await firstVisible(page, [
-      'select[name="reason"]',
-      'select[id*="reason" i]',
-    ])
-    if (reason) {
+    // Legal confirmation checkbox.
+    const legal = await firstVisible(page, ['input[name="legal"]'])
+    if (legal) {
       try {
-        await reason.selectOption("I have privacy concerns")
+        await legal.click()
       } catch {
-        /* optional */
+        /* may be auto-checked */
       }
     }
 
@@ -225,9 +201,9 @@ export const fastpeoplesearch: BrokerAdapter = {
     return {
       screenshot,
       summary:
-        `Submitting FastPeopleSearch removal for ${identity.fullName} using ${contactEmail}. ` +
-        "FPS sends a confirmation link by email; the record link we're removing is:\n" +
-        listing.url,
+        `Submitting FastPeopleSearch removal request as the subject of the record ` +
+        `(${identity.fullName}) using ${contactEmail}. Turnstile auto-solves at submit. ` +
+        `FPS emails a confirmation link; the record:\n${listing.url}`,
     }
   },
 

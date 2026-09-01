@@ -173,108 +173,57 @@ export const whitepages: BrokerAdapter = {
   // ── opt-out: prepare (fills, screenshots, does NOT submit) ────────────────
 
   async prepareOptOut(page, listing, identity, contactEmail): Promise<FilledOptOutForm> {
+    // Verified 2026-08: /suppression_requests is URL-first — paste the
+    // profile URL, click Next, then the wizard collects email + captcha.
     await page.goto(SUPPRESSION_URL, { waitUntil: "domcontentloaded" })
-    await page.waitForTimeout(2_500)
+    await page.waitForTimeout(3_000)
 
-    const firstName = identity.fullName.split(" ")[0]
-    const lastName = identity.fullName.split(" ").slice(-1)[0]
-
-    // Layered fallbacks; suppression form labels have shifted over the years.
-    const first = await firstVisible(page, [
-      'input[name="first_name"]',
-      'input[id*="first" i]',
-      'input[placeholder*="First" i]',
+    const urlField = await firstVisible(page, [
+      "#suppression-requests-person-url", // live selector
+      'input[placeholder*="URL of your profile" i]',
+      'input[placeholder*="paste the URL" i]',
     ])
-    const last = await firstVisible(page, [
-      'input[name="last_name"]',
-      'input[id*="last" i]',
-      'input[placeholder*="Last" i]',
-    ])
-    if (!first || !last) throw new Error("Whitepages opt-out: name fields not found")
-    await first.fill(firstName)
-    await last.fill(lastName)
+    if (!urlField) throw new Error("Whitepages opt-out: profile URL field not found")
+    await urlField.fill(listing.url)
 
-    const cityState = await firstVisible(page, [
-      'input[name="city_state"]',
-      'input[id*="city" i]',
-      'input[placeholder*="City" i]',
-    ])
-    if (cityState) await cityState.fill(`${identity.city}, ${identity.stateCode}`)
-
-    const stateSelect = await firstVisible(page, ['select[name="state"]', 'select[id*="state" i]'])
-    if (stateSelect) await stateSelect.selectOption(identity.stateCode)
-
-    const searchBtn = await firstVisible(page, [
-      'button:has-text("Search")',
+    const nextBtn = await firstVisible(page, [
+      'button:has-text("Next")',
       'input[type="submit"]',
       'button[type="submit"]',
     ])
-    if (searchBtn) {
-      await searchBtn.click()
-      await page.waitForTimeout(4_000)
-    }
+    if (!nextBtn) throw new Error("Whitepages opt-out: Next button not found")
+    await nextBtn.click()
+    await page.waitForTimeout(4_000)
 
-    // Find and select the record matching our listing URL.
-    const recordLink = await firstVisible(page, [
-      `a[href*="${listingIdSegment(listing.url)}"]`,
-      'a:has-text("Remove")',
-      'a:has-text("Remove me")',
-      'button:has-text("Remove")',
-    ])
-    if (recordLink) {
-      await recordLink.click()
-      await page.waitForTimeout(3_000)
-    }
-
-    // Removal reason, if the flow asks.
-    const reason = await firstVisible(page, [
-      'select[name="reason"]',
-      'select[id*="reason" i]',
-      'input[value*="privacy" i]',
-      'label:has-text("privacy")',
-    ])
-    if (reason) {
-      try {
-        await reason.selectOption("I have privacy concerns")
-      } catch {
-        try {
-          await reason.click()
-        } catch {
-          /* optional field */
-        }
-      }
-    }
-
+    // Wizard step 2: identity/email. (Some variants ask for name+city first.)
     const email = await firstVisible(page, [
       'input[name="email"]',
       'input[type="email"]',
       'input[id*="email" i]',
     ])
-    if (!email) throw new Error("Whitepages opt-out: email field not found")
-    await email.fill(contactEmail)
+    if (email) await email.fill(contactEmail)
 
-    const phone = await firstVisible(page, [
-      'input[name="phone"]',
-      'input[type="tel"]',
-      'input[id*="phone" i]',
+    const firstNameField = await firstVisible(page, [
+      'input[name="first_name"]',
+      'input[id*="first" i][type="text"]',
+      'input[placeholder*="First" i]',
     ])
-    if (phone) await phone.fill((listing.exposedData.phones ?? [""])[0] ?? "")
-
-    const captchaOk = await firstVisible(page, [
-      'iframe[src*="recaptcha"]',
-      'iframe[src*="hcaptcha"]',
-      '[class*="captcha"]',
+    if (firstNameField) await firstNameField.fill(identity.fullName.split(" ")[0])
+    const lastNameField = await firstVisible(page, [
+      'input[name="last_name"]',
+      'input[id*="last" i][type="text"]',
+      'input[placeholder*="Last" i]',
     ])
-    // Solari auto-solves during submit when captcha:true is set on launch.
+    if (lastNameField) await lastNameField.fill(identity.fullName.split(" ").slice(-1)[0])
 
+    // Turnstile/captcha: Solari auto-solves at submit (captcha:true).
     const screenshot = await page.screenshot({ fullPage: true })
     return {
       screenshot,
       summary:
-        `Submitting Whitepages suppression request for ${identity.fullName} ` +
-        `(${identity.city}, ${identity.stateCode}) using ${contactEmail}. ` +
-        (captchaOk ? "A captcha will be auto-solved at submit time. " : "") +
-        "Whitepages will email a confirmation link you must click.",
+        `Submitting Whitepages suppression request for your profile:\n${listing.url}\n` +
+        `Contact email: ${contactEmail}. A captcha (if present) auto-solves at submit. ` +
+        "Whitepages emails a confirmation link you must click.",
     }
   },
 
@@ -326,14 +275,6 @@ export const whitepages: BrokerAdapter = {
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
-
-function listingIdSegment(listingUrl: string): string {
-  // Whitepages profile URLs look like /name/John-Smith/5hvHk7 — the trailing
-  // segment is the stable record id we can match against in the suppression
-  // search results.
-  const segs = listingUrl.split("/").filter(Boolean)
-  return segs[segs.length - 1] ?? ""
-}
 
 async function extractProfileUrls(page: BrokerPage, identity: Identity): Promise<string[]> {
   const hrefs: string[] = []

@@ -158,7 +158,7 @@ function adaptLocator(locator: Locator): import("@/types").BrokerLocator {
     click: () => locator.click() as Promise<void>,
     fill: (v) => locator.fill(v) as Promise<void>,
     type: (t) => locator.type(t) as Promise<void>,
-    selectOption: (v) => locator.selectOption(v) as unknown as Promise<void>,
+    selectOption: (v) => locator.selectOption(v as never) as unknown as Promise<void>,
     press: (k) => locator.press(k) as Promise<void>,
     first: () => adaptLocator(locator.first()),
     nth: (i) => adaptLocator(locator.nth(i)),
