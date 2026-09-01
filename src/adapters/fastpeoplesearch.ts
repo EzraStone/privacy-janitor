@@ -88,7 +88,15 @@ export const fastpeoplesearch: BrokerAdapter = {
     for (const url of [...new Set(urls)].slice(0, 5)) {
       try {
         await page.goto(url, { waitUntil: "domcontentloaded" })
-        await page.waitForTimeout(2_500)
+
+        // FPS hydrates profiles client-side; "Loading Search Results..." in
+        // <h1> means it isn't done. Poll until real content or ~10s cap.
+        const deadline = Date.now() + 10_000
+        while (Date.now() < deadline) {
+          const h1 = (await tryInnerText(page, "h1")) ?? ""
+          if (h1 && !h1.toLowerCase().includes("loading")) break
+          await page.waitForTimeout(1_000)
+        }
 
         const displayName = (await tryInnerText(page, "h1")) ?? identity.fullName
 
