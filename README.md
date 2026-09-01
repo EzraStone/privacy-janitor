@@ -136,9 +136,10 @@ back locally at render time.
 ## Development
 
 ```bash
-npm run typecheck   # strict TS, zero errors
-npm run smoke       # adapter sanity checks (no API keys needed)
-npm run dev         # dashboard
+npm run typecheck       # strict TS, zero errors
+npm run smoke           # adapter sanity checks (no API keys needed)
+npm run smoke:store     # store transactions + cleanup jail (throwaway temp DB)
+npm run dev             # dashboard
 ```
 
 ### Architecture
@@ -149,7 +150,8 @@ src/
 ├── store/                 # node:sqlite (zero native deps), local only
 ├── engine/
 │   ├── solari.ts          # stealth session recipe, evidence, replay polling
-│   └── orchestrator.ts    # scan / prepare / approve / submit / confirm / rescan
+│   ├── orchestrator.ts    # scan / prepare / approve / submit / confirm / rescan
+│   └── cleanup.ts         # evidence deletion, path-jailed to data/evidence
 ├── adapters/              # one per broker + shared DOM fallback helpers
 ├── scoring/               # PII redaction + Groq exposure ranking
 └── app/                   # Next.js dashboard + local API routes
