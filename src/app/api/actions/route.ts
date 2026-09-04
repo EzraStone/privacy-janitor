@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server"
-import { ok, fail, readJson } from "../_lib"
+import { ok, fail, failFromError, readJson } from "../_lib"
 import {
   prepareListingOptOut,
   submitApprovedOptOut,
@@ -7,11 +7,16 @@ import {
 } from "@/engine/orchestrator"
 import { scoreExposure } from "@/scoring"
 import * as store from "@/store"
+import {
+  assertTrustedLocalRequest,
+  validateBrokerConfirmationUrl,
+} from "@/security/requests"
 
 export const dynamic = "force-dynamic"
 
 export async function POST(req: NextRequest) {
   try {
+    assertTrustedLocalRequest(req)
     const body = await readJson<{
       action:
         | "prepare-optout"
@@ -48,7 +53,13 @@ export async function POST(req: NextRequest) {
       case "confirm-email": {
         if (!body.listingId || !body.confirmationUrl)
           return fail("listingId and confirmationUrl are required")
-        await confirmOptOutEmail(body.listingId, body.confirmationUrl)
+        const listing = store.getListing(body.listingId)
+        if (!listing) return fail("listing not found", 404)
+        const confirmationUrl = validateBrokerConfirmationUrl(
+          body.confirmationUrl,
+          listing.brokerId,
+        )
+        await confirmOptOutEmail(body.listingId, confirmationUrl)
         return ok({ done: true })
       }
 
@@ -68,6 +79,6 @@ export async function POST(req: NextRequest) {
         return fail("unknown action")
     }
   } catch (err) {
-    return fail(err instanceof Error ? err.message : "request failed", 500)
+    return failFromError(err)
   }
 }

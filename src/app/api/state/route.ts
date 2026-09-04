@@ -1,23 +1,30 @@
 import { NextRequest } from "next/server"
-import { ok, fail, readJson } from "../_lib"
+import { ok, fail, failFromError, readJson } from "../_lib"
 import * as store from "@/store"
 import { runScan } from "@/engine/orchestrator"
 import { removeEvidencePaths } from "@/engine/cleanup"
 import type { Identity } from "@/types"
+import { assertTrustedLocalRequest } from "@/security/requests"
 
 export const dynamic = "force-dynamic"
 
-export async function GET() {
-  return ok({
-    identities: store.listIdentities(),
-    listings: store.listListings(),
-    submissions: store.listSubmissions(),
-    scans: store.listScanRuns(),
-  })
+export async function GET(req: NextRequest) {
+  try {
+    assertTrustedLocalRequest(req)
+    return ok({
+      identities: store.listIdentities(),
+      listings: store.listListings(),
+      submissions: store.listSubmissions(),
+      scans: store.listScanRuns(),
+    })
+  } catch (err) {
+    return failFromError(err)
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    assertTrustedLocalRequest(req)
     const body = await readJson<{
       action:
         | "save-identity"
@@ -89,6 +96,6 @@ export async function POST(req: NextRequest) {
         return fail("unknown action")
     }
   } catch (err) {
-    return fail(err instanceof Error ? err.message : "request failed", 500)
+    return failFromError(err)
   }
 }
