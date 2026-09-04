@@ -52,8 +52,11 @@ export async function scoreExposure(
     .map((l, i) => `--- listing ${i} ---\n${redactListing(l, map)}`)
     .join("\n\n")
 
-  // Location context at region granularity only, redacted.
-  const context = `subject_location: ${redactText(identity.city, map)}, state ${identity.stateCode}`
+  // Preserve region-level scoring context without sending literal location values.
+  const context = redactText(
+    `subject_location: ${identity.city}, state ${identity.stateCode}`,
+    map,
+  )
 
   const system = `You are a privacy risk analyst. You rank data-broker listings by how dangerous they are to the person listed. All personal values are tokenized placeholders — never attempt to guess or expand them. Respond with strict JSON only.`
 

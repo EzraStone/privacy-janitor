@@ -64,8 +64,8 @@ evidence into `data/evidence/` alongside a replay URL.
 - 🙋 **Namesake filtering** — fact-based URL filters plus fuzzy name-slug matching narrow the
   hits; you confirm each one before it enters the queue.
 - 📊 **Privacy-conscious risk ranking** — each listing gets a 0–100 exposure score and a
-  plain-language rationale. Direct identifiers are tokenized before optional Groq scoring;
-  coarse city/state context may also be included.
+  plain-language rationale. Direct identifiers and profile location are tokenized before
+  optional Groq scoring.
 - ✋ **A hard approval gate** — forms are filled, screenshotted, and parked. Nothing submits
   until you click approve.
 - 🧾 **Evidence for every action** — full-page screenshots on disk plus a Solari session replay
@@ -126,12 +126,12 @@ recorded, so every removal has replayable evidence.
 |------|----------------|
 | Your identity, listings, submissions | `data/privacy-janitor.db` (local SQLite) |
 | Evidence screenshots | `data/evidence/` (local files) |
-| Data sent for optional LLM scoring | Direct identifiers are tokenized (`[NAME_1]`, `[ADDR_1]`); coarse city/state context may also be included. See `src/scoring/redact.ts` |
+| Data sent for optional LLM scoring | Identifiers and location values are tokenized (`[NAME_1]`, `[ADDR_1]`, `[LOCATION_1]`). See `src/scoring/redact.ts` |
 | Accounts, telemetry, backend | **None.** It's a localhost web app |
 
 The model receives the tokenized *structure* of your exposure — *"[NAME_1] appears on Broker B
-with [ADDR_1], [PHONE_1] and two relatives"* — plus coarse location context. Tokens are mapped
-back locally at render time.
+with [ADDR_1], [PHONE_1] and two relatives"* — plus tokenized location context. Tokens are
+mapped back locally at render time.
 
 ## Development
 

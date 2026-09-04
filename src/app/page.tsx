@@ -361,8 +361,8 @@ export default function Home() {
                 })}
               </div>
               <p className="text-xs text-zinc-500">
-                Optional Groq scoring receives tokenized listing fields plus the profile&apos;s
-                coarse city and state context.
+                Optional Groq scoring receives tokenized listing and profile-location fields;
+                literal names, addresses, phone numbers, emails, cities, and states stay local.
               </p>
             </div>
           ) : (

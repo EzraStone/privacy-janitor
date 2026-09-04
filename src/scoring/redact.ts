@@ -22,6 +22,8 @@ export function buildRedactionMap(identity: Identity, listings: Listing[]): Reda
   const values = new Set<string>()
 
   values.add(identity.fullName)
+  values.add(identity.city)
+  values.add(identity.stateCode)
   identity.relatives?.forEach((r) => values.add(r))
 
   for (const l of listings) {
@@ -45,14 +47,16 @@ export function buildRedactionMap(identity: Identity, listings: Listing[]): Reda
   let addrN = 0
   let phoneN = 0
   let emailN = 0
+  let locationN = 0
   let relN = 0
-  let miscN = 0
 
   for (const v of values) {
     const key = v.toLowerCase()
     if (valueToToken.has(key)) continue
     let token: string
-    if (v === identity.fullName || identity.relatives?.includes(v)) {
+    if (v === identity.city || v === identity.stateCode) {
+      token = `[LOCATION_${++locationN}]`
+    } else if (v === identity.fullName || identity.relatives?.includes(v)) {
       token = `[NAME_${++nameN}]`
     } else if (/[\d]/.test(v) && v.replace(/\D/g, "").length >= 7) {
       token = `[PHONE_${++phoneN}]`
@@ -79,7 +83,11 @@ export function redactText(text: string, map: RedactionMap): string {
   )
   for (const [value, token] of entries) {
     const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    out = out.replace(new RegExp(escaped, "gi"), token)
+    // Short values such as state codes must match whole values, not the
+    // same letters inside an unrelated word (for example, "WA" in "awaiting").
+    const leftBoundary = /^[a-z0-9]/i.test(value) ? "(?<![a-z0-9])" : ""
+    const rightBoundary = /[a-z0-9]$/i.test(value) ? "(?![a-z0-9])" : ""
+    out = out.replace(new RegExp(`${leftBoundary}${escaped}${rightBoundary}`, "gi"), token)
   }
   return out
 }

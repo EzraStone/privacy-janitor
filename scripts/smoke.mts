@@ -76,6 +76,23 @@ check("listing text is tokenized", redacted.includes("[NAME_"))
 const prose = redactText("Jane Doe lives at 742 Evergreen Terrace with John Doe", map)
 check("free text redaction replaces all values", !prose.includes("Jane") && !prose.includes("Evergreen"))
 
+const locationContext = redactText(
+  `subject_location: ${identity.city}, state ${identity.stateCode}`,
+  map,
+)
+check(
+  "profile location context has no raw values",
+  !locationContext.includes(identity.city) && !locationContext.includes(identity.stateCode),
+)
+check(
+  "profile location context is tokenized",
+  (locationContext.match(/\[LOCATION_\d+\]/g) ?? []).length === 2,
+)
+check(
+  "short state codes do not redact inside words",
+  redactText("awaiting confirmation", map) === "awaiting confirmation",
+)
+
 console.log("smoke: scoring parser tolerance")
 // simulate the safeParseJson fallback path with fences
 const fenced = '```json\n{"rankings":[],"summary":"ok"}\n```'
