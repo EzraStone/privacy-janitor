@@ -11,13 +11,65 @@ import { withBrokerSession, getReplayUrl } from "./solari.ts"
 
 // ── scan ────────────────────────────────────────────────────────────────────
 
-export async function runScan(identityId: string): Promise<ScanRun> {
+type OrchestratorGlobal = typeof globalThis & {
+  __pjActiveScans?: Map<string, Promise<void>>
+}
+
+const orchestratorGlobal = globalThis as OrchestratorGlobal
+const activeScans = orchestratorGlobal.__pjActiveScans ??= new Map()
+
+/** Queue a scan and reuse an unfinished run instead of starting a duplicate. */
+export function startScan(identityId: string): { run: ScanRun; resumed: boolean } {
+  if (!store.getIdentity(identityId)) throw new Error(`identity ${identityId} not found`)
+  const existing = store.listScanRuns(identityId).find((run) => !run.finishedAt)
+  const run = existing ?? store.createScanRun(identityId)
+  scheduleScan(run)
+  return { run, resumed: Boolean(existing) }
+}
+
+/** Restart unfinished scans when the local app is opened after an interruption. */
+export function resumeIncompleteScans(): void {
+  const newestByIdentity = new Set<string>()
+  for (const run of store.listScanRuns().filter((candidate) => !candidate.finishedAt)) {
+    if (newestByIdentity.has(run.identityId)) {
+      // Older unfinished rows came from a previous process; keep one canonical run.
+      store.finishScanRun(run)
+      continue
+    }
+    newestByIdentity.add(run.identityId)
+    if (store.getIdentity(run.identityId)) scheduleScan(run)
+    else store.finishScanRun(run)
+  }
+}
+
+function scheduleScan(run: ScanRun): void {
+  if (activeScans.has(run.id)) return
+  const task = runScan(run.identityId, run.id)
+    .catch((err) => {
+      console.error(`[scan] ${run.id} stopped:`, err)
+    })
+    .finally(() => {
+      activeScans.delete(run.id)
+    })
+  activeScans.set(run.id, task)
+}
+
+export async function runScan(identityId: string, resumeRunId?: string): Promise<ScanRun> {
   const identity = store.getIdentity(identityId)
   if (!identity) throw new Error(`identity ${identityId} not found`)
 
-  const run = store.createScanRun(identityId)
+  const run = resumeRunId ? store.getScanRun(resumeRunId) : store.createScanRun(identityId)
+  if (!run || run.identityId !== identityId) {
+    throw new Error(`scan ${resumeRunId ?? "unknown"} not found for identity ${identityId}`)
+  }
+  if (run.finishedAt) return run
+  const completedBrokers = new Set(run.results.map((result) => result.brokerId))
 
   for (const adapter of adapters) {
+    if (completedBrokers.has(adapter.id)) continue
+    // The user may delete the profile while a remote broker session is running.
+    if (!store.getIdentity(identityId) || !store.getScanRun(run.id)) return run
+
     try {
       const { result: listings, evidence } = await withBrokerSession(
         `scan-${adapter.id}`,
@@ -62,9 +114,12 @@ export async function runScan(identityId: string): Promise<ScanRun> {
         error: err instanceof Error ? err.message : String(err),
       })
     }
+
+    // A crash after this point resumes at the next broker, not from scratch.
+    if (!store.saveScanRunProgress(run)) return run
   }
 
-  store.finishScanRun(run)
+  if (store.getScanRun(run.id)) store.finishScanRun(run)
   return run
 }
 

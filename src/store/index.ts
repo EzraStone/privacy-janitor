@@ -477,10 +477,26 @@ export function createScanRun(identityId: string): ScanRun {
   return run
 }
 
+export function getScanRun(id: string): ScanRun | undefined {
+  const row = open().prepare("SELECT * FROM scan_runs WHERE id = ?").get(id) as
+    | Record<string, unknown>
+    | undefined
+  return row ? rowToScanRun(row) : undefined
+}
+
+/** Persist broker-by-broker progress so an interrupted scan can resume. */
+export function saveScanRunProgress(run: ScanRun): boolean {
+  const result = open()
+    .prepare("UPDATE scan_runs SET results = ? WHERE id = ?")
+    .run(JSON.stringify(run.results), run.id)
+  return result.changes > 0
+}
+
 export function finishScanRun(run: ScanRun): void {
+  run.finishedAt = new Date().toISOString()
   open()
     .prepare("UPDATE scan_runs SET finished_at = ?, results = ? WHERE id = ?")
-    .run(new Date().toISOString(), JSON.stringify(run.results), run.id)
+    .run(run.finishedAt, JSON.stringify(run.results), run.id)
 }
 
 export function listScanRuns(identityId?: string): ScanRun[] {
@@ -490,13 +506,17 @@ export function listScanRuns(identityId?: string): ScanRun[] {
       ? db.prepare("SELECT * FROM scan_runs WHERE identity_id = ? ORDER BY started_at DESC").all(identityId)
       : db.prepare("SELECT * FROM scan_runs ORDER BY started_at DESC").all()
   ) as Array<Record<string, unknown>>
-  return rows.map((r) => ({
+  return rows.map(rowToScanRun)
+}
+
+function rowToScanRun(r: Record<string, unknown>): ScanRun {
+  return {
     id: r.id as string,
     identityId: r.identity_id as string,
     startedAt: r.started_at as string,
     finishedAt: (r.finished_at as string) ?? undefined,
     results: JSON.parse(r.results as string),
-  }))
+  }
 }
 
 // ── prepared opt-outs (between prepare and user approval) ──────────────────

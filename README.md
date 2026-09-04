@@ -72,6 +72,8 @@ evidence into `data/evidence/` alongside a replay URL.
   for the scan, the submit, and the email confirmation.
 - 🔁 **Proof of removal** — re-scans diff against the last run and split results into removed,
   still-listed, and relisted.
+- 💾 **Resumable scans** — broker-by-broker progress is saved locally, so reopening the app
+  continues an interrupted scan without repeating completed brokers.
 - 🗄️ **No account, no backend** — `node:sqlite` (zero native deps) on localhost. No sign-up, no
   telemetry, no server holding your address.
 

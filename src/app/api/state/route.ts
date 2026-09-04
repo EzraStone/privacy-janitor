@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server"
 import { ok, fail, failFromError, readJson } from "../_lib"
 import * as store from "@/store"
-import { runScan } from "@/engine/orchestrator"
+import { resumeIncompleteScans, startScan } from "@/engine/orchestrator"
 import { removeEvidencePaths } from "@/engine/cleanup"
 import type { Identity } from "@/types"
 import { assertTrustedLocalRequest } from "@/security/requests"
@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic"
 export async function GET(req: NextRequest) {
   try {
     assertTrustedLocalRequest(req)
+    resumeIncompleteScans()
     return ok({
       identities: store.listIdentities(),
       listings: store.listListings(),
@@ -59,11 +60,9 @@ export async function POST(req: NextRequest) {
 
       case "scan": {
         if (!body.identityId) return fail("identityId required")
-        // Long-running; fire-and-forget with run id surfaced via scans list.
-        const identity = store.getIdentity(body.identityId)
-        if (!identity) return fail("identity not found", 404)
-        void runScan(body.identityId).catch(() => {})
-        return ok({ started: true, identityId: body.identityId })
+        if (!store.getIdentity(body.identityId)) return fail("identity not found", 404)
+        const { run, resumed } = startScan(body.identityId)
+        return ok({ started: true, resumed, identityId: body.identityId, runId: run.id })
       }
 
       case "confirm-listing": {
@@ -80,6 +79,9 @@ export async function POST(req: NextRequest) {
 
       case "delete-identity": {
         if (!body.identityId) return fail("identityId required")
+        if (store.listScanRuns(body.identityId).some((run) => !run.finishedAt)) {
+          return fail("wait for the active scan to finish before deleting this profile", 409)
+        }
         // DB rows go in one transaction; evidence files after commit.
         const evidenceDirs = store.deleteIdentity(body.identityId)
         const filesRemoved = removeEvidencePaths(evidenceDirs)
@@ -87,6 +89,9 @@ export async function POST(req: NextRequest) {
       }
 
       case "reset-all": {
+        if (store.listScanRuns().some((run) => !run.finishedAt)) {
+          return fail("wait for active scans to finish before resetting local data", 409)
+        }
         const { evidenceDirs } = store.resetAll()
         const filesRemoved = removeEvidencePaths(evidenceDirs)
         return ok({ done: true, evidenceCleaned: filesRemoved })
