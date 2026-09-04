@@ -7,13 +7,13 @@
  * evidence directory.
  */
 import { rmSync, statSync } from "node:fs"
-import { resolve, join } from "node:path"
+import { isAbsolute, relative, resolve, sep } from "node:path"
+import { getEvidenceDir } from "../config/paths.ts"
 
 /** Evidence root — honors PJ_DATA_DIR (same override as the store) so tests
  *  jail against the same root the store writes to. */
 function evidenceRoot(): string {
-  const dataDir = process.env.PJ_DATA_DIR ?? join(process.cwd(), "data")
-  return resolve(dataDir, "evidence")
+  return getEvidenceDir()
 }
 
 /** True if target is strictly INSIDE the evidence root (never the root
@@ -21,7 +21,8 @@ function evidenceRoot(): string {
 function isJailed(target: string): boolean {
   const root = evidenceRoot()
   const resolved = resolve(target)
-  return resolved.startsWith(root + "\\") || resolved.startsWith(root + "/")
+  const child = relative(root, resolved)
+  return child !== "" && child !== ".." && !child.startsWith(`..${sep}`) && !isAbsolute(child)
 }
 
 /**

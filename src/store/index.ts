@@ -7,7 +7,8 @@
  */
 import { DatabaseSync } from "node:sqlite"
 import { mkdirSync } from "node:fs"
-import { dirname, join } from "node:path"
+import { dirname } from "node:path"
+import { getDatabasePath } from "../config/paths.ts"
 import type {
   Identity,
   Listing,
@@ -18,10 +19,9 @@ import type {
   SubmissionStatus,
 } from "@/types"
 
-// PJ_DATA_DIR lets tests (scripts/smoke) point the store at a temp dir
-// without touching the user's real database.
-const DATA_DIR = process.env.PJ_DATA_DIR ?? join(process.cwd(), "data")
-const DB_PATH = join(DATA_DIR, "privacy-janitor.db")
+// PJ_DATA_DIR lets tests and demos use an isolated store without touching
+// the user's real database or evidence directory.
+const DB_PATH = getDatabasePath()
 
 // Singleton across Next.js dev hot reloads.
 const g = globalThis as unknown as { __pjDb?: DatabaseSync }

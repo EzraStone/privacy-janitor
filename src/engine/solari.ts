@@ -15,8 +15,7 @@ import { Solari } from "@solarisdk/browser"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { BrokerPage } from "@/types"
-
-const EVIDENCE_DIR = join(process.cwd(), "data", "evidence")
+import { getEvidenceDir } from "../config/paths.ts"
 
 export interface RunEvidence {
   runId: string
@@ -92,7 +91,7 @@ export async function withBrokerSession<T>(
 ): Promise<{ result: T; evidence: RunEvidence }> {
   const client = getSolariClient()
   const runId = `${flowName}-${Date.now().toString(36)}`
-  const evidenceDir = join(EVIDENCE_DIR, runId)
+  const evidenceDir = join(getEvidenceDir(), runId)
   mkdirSync(evidenceDir, { recursive: true })
 
   const evidence: RunEvidence = {

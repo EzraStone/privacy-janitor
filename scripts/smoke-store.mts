@@ -14,6 +14,7 @@ process.env.PJ_DATA_DIR = tempRoot
 
 // Import AFTER setting PJ_DATA_DIR — module reads it at load time.
 const store = await import("../src/store/index.ts")
+const paths = await import("../src/config/paths.ts")
 
 let failures = 0
 function check(name: string, cond: boolean) {
@@ -25,6 +26,11 @@ function check(name: string, cond: boolean) {
 }
 
 console.log("smoke: identity CRUD")
+check("store uses isolated data directory", paths.getDataDir() === tempRoot)
+check(
+  "evidence uses the same isolated data directory",
+  paths.getEvidenceDir() === join(tempRoot, "evidence"),
+)
 const id1 = {
   id: "id_smoke1",
   fullName: "Alice Doe",
