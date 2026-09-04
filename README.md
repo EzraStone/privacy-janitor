@@ -139,6 +139,8 @@ back locally at render time.
 npm run typecheck       # strict TS, zero errors
 npm run smoke           # adapter sanity checks (no API keys needed)
 npm run smoke:store     # store transactions + cleanup jail (throwaway temp DB)
+npm run smoke:security  # localhost boundary, origin, input, and URL checks
+npm run check           # run every check plus a production build
 npm run dev             # dashboard
 ```
 
