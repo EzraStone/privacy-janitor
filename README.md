@@ -31,9 +31,9 @@ those requests. PrivacyJanitor sends them for you, from your own machine, for fr
 The walkthrough and screenshots below use the fictional profile **Jordan Example**. No real
 user data, live broker results, or live submissions are included in these repository assets.
 
-[![Watch the PrivacyJanitor feature walkthrough](docs/images/dashboard-demo.png)](docs/demo/privacy-janitor-demo.webm)
+[![Watch the PrivacyJanitor feature walkthrough](docs/images/dashboard-demo.png)](docs/demo/privacy-janitor-demo.mp4)
 
-<p align="center"><a href="docs/demo/privacy-janitor-demo.webm"><strong>▶ Watch the 33-second feature walkthrough</strong></a><br><sub>Profiles, scans, match review, risk ranking, approval gates, email confirmation, removal verification, and history.</sub></p>
+<p align="center"><a href="docs/demo/privacy-janitor-demo.mp4"><strong>▶ Watch the 33-second feature walkthrough</strong></a><br><sub>Profiles, scans, match review, risk ranking, approval gates, email confirmation, removal verification, and history.</sub></p>
 
 ![PrivacyJanitor consent-based profile form filled with fictional demo data](docs/images/profile-form-demo.png)
 
