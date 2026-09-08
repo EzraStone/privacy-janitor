@@ -6,10 +6,12 @@
  *   2. match scoring logic (namesake rejection)
  *   3. PII redaction (no raw values survive into prompt text)
  *   4. JSON round-trip for the scoring parser
+ *   5. sticky-proxy session ids stay inside Solari's 32-char cap
  *
  * Run: npm run smoke
  */
 import { adapters } from "../src/adapters/registry.ts"
+import { proxySessionId } from "../src/engine/solari.ts"
 import { scoreMatch } from "../src/adapters/helpers.ts"
 import { buildRedactionMap, redactText, redactListing } from "../src/scoring/redact.ts"
 import type { Identity, Listing } from "../src/types.ts"
@@ -33,6 +35,24 @@ for (const a of adapters) {
   check(`${a.id}: has submitOptOut`, typeof a.submitOptOut === "function")
   check(`${a.id}: declares email-confirmation stance`, typeof a.expectsEmailConfirmation === "boolean")
 }
+
+console.log("smoke: proxy session ids")
+// Solari caps proxy.session at 32 chars. Over-running it silently drops the
+// sticky pin rather than erroring, so a long broker id would rotate our egress
+// IP mid-flow and read as a session hijack. Guard the longest id we ship.
+const longestBrokerId = [...adapters].sort((a, b) => b.id.length - a.id.length)[0].id
+const stamp = Date.now().toString(36)
+// Mirrors the flow names orchestrator.ts passes to withBrokerSession().
+for (const prefix of ["scan", "optout", "submit", "confirm"]) {
+  const runId = `${prefix}-${longestBrokerId}-${stamp}`
+  check(`${runId} pins within 32 chars`, proxySessionId(runId).length <= 32)
+}
+check("short run ids pass through unchanged", proxySessionId("scan-spokeo-abc") === "scan-spokeo-abc")
+check("over-long run ids are still bounded", proxySessionId("x".repeat(500)).length <= 32)
+check(
+  "distinct long run ids pin to distinct egress sessions",
+  proxySessionId(`confirm-${"b".repeat(40)}-1`) !== proxySessionId(`confirm-${"b".repeat(40)}-2`),
+)
 
 console.log("smoke: match scoring")
 const exact = scoreMatch("John Smith", "John Smith", ["123 Main St, Seattle, WA"], "Seattle", "WA")

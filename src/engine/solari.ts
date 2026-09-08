@@ -7,11 +7,14 @@
  * us hop countries mid-flow).
  *
  * Encodes the Solari cookbook gotchas:
- *   - ALWAYS close the browser (skip it and the script hangs forever)
+ *   - ALWAYS close the browser. On the pinned 0.1.1 the process never exits
+ *     if you skip it; 0.1.3+ unrefs the listener, but closing still matters —
+ *     an unclosed session keeps burning cloud browser time either way.
  *   - replay uploads are async — poll getReplayUrl for up to ~30s
  *   - stealth is a prerequisite for proxy + captcha
  */
 import { Solari } from "@solarisdk/browser"
+import { createHash } from "node:crypto"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { BrokerPage } from "@/types"
@@ -38,12 +41,40 @@ export function getSolariClient(): Solari {
   })
 }
 
+/**
+ * Solari caps the sticky-proxy session id at 32 characters, and run ids are
+ * human-readable enough to blow past it — `confirm-fastpeoplesearch-<ts>` is
+ * already 33. An over-long id is not a loud failure: it costs you the pin, so
+ * the residential egress rotates mid-flow and the broker sees the form load
+ * and the submit arrive from different IPs. That is indistinguishable from a
+ * session hijack, and it gets you challenged partway through a flow that was
+ * working a second earlier.
+ *
+ * Keep as much of the readable run id as fits, then a short digest so two runs
+ * sharing a prefix still pin to different egress IPs.
+ */
+const MAX_PROXY_SESSION_ID = 32
+
+export function proxySessionId(runId: string): string {
+  if (runId.length <= MAX_PROXY_SESSION_ID) return runId
+  const digest = createHash("sha256").update(runId).digest("hex").slice(0, 8)
+  return `${runId.slice(0, MAX_PROXY_SESSION_ID - digest.length - 1)}-${digest}`
+}
+
+/**
+ * Minutes to hold one egress IP. Solari accepts 1-30, and the pin lapses on
+ * the clock rather than on flow completion — so this is a hard ceiling on how
+ * long a single broker flow can run before its IP rotates underneath it. 30 is
+ * the maximum the API allows; there is no headroom left to buy.
+ */
+const PROXY_SESSION_MINUTES = 30
+
 /** Launch options that degrade to the free plan when stealth is paywalled. */
 const STEALTH_RECIPE = {
   stealth: true,
   captcha: true,
   recording: true,
-  proxy: { country: "us", session: "", sessionDuration: 30 },
+  proxy: { country: "us", session: "", sessionDuration: PROXY_SESSION_MINUTES },
 } as const
 
 const DEFAULT_RECIPE = {
@@ -57,7 +88,11 @@ export async function launchResilient(
   try {
     const browser = await client.launch({
       ...STEALTH_RECIPE,
-      proxy: { country: "us", session: runId, sessionDuration: 30 },
+      proxy: {
+        country: "us",
+        session: proxySessionId(runId),
+        sessionDuration: PROXY_SESSION_MINUTES,
+      },
     })
     return { browser, stealth: true }
   } catch (err) {
@@ -116,7 +151,7 @@ export async function withBrokerSession<T>(
     const result = await fn(page, evidence, rawPage)
     return { result, evidence }
   } finally {
-    await browser.close() // never skip — the SDK hangs if you do
+    await browser.close() // never skip: hangs on 0.1.1, leaks the session on any version
   }
 }
 
