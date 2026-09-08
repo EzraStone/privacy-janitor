@@ -7,7 +7,7 @@
 import type { Identity, Listing, ScanRun } from "../types.ts"
 import { adapters, getAdapter } from "../adapters/registry.ts"
 import * as store from "../store/index.ts"
-import { withBrokerSession, getReplayUrl } from "./solari.ts"
+import { createProxySessionId, withBrokerSession, getReplayUrl } from "./solari.ts"
 
 // ── scan ────────────────────────────────────────────────────────────────────
 
@@ -135,10 +135,13 @@ export async function prepareListingOptOut(
   const identity = store.getIdentity(listing.identityId)
   if (!identity) throw new Error(`identity ${listing.identityId} not found`)
   const adapter = getAdapter(listing.brokerId)
+  const stickySessionId = createProxySessionId(`optout-${adapter.id}`)
 
-  const { result, evidence } = await withBrokerSession(`optout-${adapter.id}`, async (page) => {
-    return adapter.prepareOptOut(page, listing, identity, contactEmail)
-  })
+  const { result, evidence } = await withBrokerSession(
+    `optout-${adapter.id}`,
+    async (page) => adapter.prepareOptOut(page, listing, identity, contactEmail),
+    { proxySessionId: stickySessionId },
+  )
 
   const previewPath = evidence.screenshot("optout-preview", result.screenshot)
   const replay = evidence.sessionId ? await getReplayUrl(evidence.sessionId).catch(() => undefined) : undefined
@@ -152,6 +155,7 @@ export async function prepareListingOptOut(
       previewPath,
       replayUrl: replay ?? "",
       sessionEvidenceDir: evidence.evidenceDir,
+      proxySessionId: evidence.proxySessionId,
     },
     createdAt: new Date().toISOString(),
   })
@@ -189,6 +193,7 @@ export async function submitApprovedOptOut(listingId: string): Promise<void> {
         await adapter.prepareOptOut(page, listing, identity, prepared.state.contactEmail)
         return adapter.submitOptOut(page, prepared)
       },
+      { proxySessionId: prepared.state.proxySessionId },
     )
 
     const resultPath = result.screenshot

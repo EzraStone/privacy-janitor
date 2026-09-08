@@ -55,6 +55,8 @@ flowchart LR
 
 Every broker interaction runs inside a **recorded Solari session**, and every action files
 evidence into `data/evidence/` alongside a replay URL.
+Preparation and approved submission reuse one bounded sticky-egress label so a multi-session
+opt-out flow keeps the same residential IP while Solari's 30-minute pin remains active.
 
 ## What you get
 

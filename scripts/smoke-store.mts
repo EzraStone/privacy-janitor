@@ -78,6 +78,18 @@ store.updateSubmission(sub.id, { status: "awaiting_email" })
 check("listings saved", store.listListings().length === 2)
 check("submissions saved", store.listSubmissions("lst_s1").length === 1)
 
+const preparedProxySessionId = "optout-whitepages-test"
+store.savePreparedOptOut({
+  listingId: "lst_s1",
+  brokerId: "whitepages",
+  state: { contactEmail: "test@example.com", proxySessionId: preparedProxySessionId },
+  createdAt: new Date().toISOString(),
+})
+check(
+  "prepared opt-out retains its sticky proxy session",
+  store.getPreparedOptOut("lst_s1")?.state.proxySessionId === preparedProxySessionId,
+)
+
 console.log("smoke: durable scan progress")
 const scan = store.createScanRun("id_smoke1")
 scan.results.push({ brokerId: "whitepages", ok: true, listingsFound: 1 })

@@ -11,7 +11,7 @@
  * Run: npm run smoke
  */
 import { adapters } from "../src/adapters/registry.ts"
-import { proxySessionId } from "../src/engine/solari.ts"
+import { createProxySessionId, proxySessionId } from "../src/engine/solari.ts"
 import { scoreMatch } from "../src/adapters/helpers.ts"
 import { buildRedactionMap, redactText, redactListing } from "../src/scoring/redact.ts"
 import type { Identity, Listing } from "../src/types.ts"
@@ -49,10 +49,21 @@ for (const prefix of ["scan", "optout", "submit", "confirm"]) {
 }
 check("short run ids pass through unchanged", proxySessionId("scan-spokeo-abc") === "scan-spokeo-abc")
 check("over-long run ids are still bounded", proxySessionId("x".repeat(500)).length <= 32)
+check("invalid sticky-session characters are normalized", proxySessionId("Opt Out_ID") === "opt-out-id")
 check(
   "distinct long run ids pin to distinct egress sessions",
   proxySessionId(`confirm-${"b".repeat(40)}-1`) !== proxySessionId(`confirm-${"b".repeat(40)}-2`),
 )
+const flowSessionA = createProxySessionId("optout-fastpeoplesearch")
+const flowSessionB = createProxySessionId("optout-fastpeoplesearch")
+check("generated flow session ids stay within 32 chars", flowSessionA.length <= 32)
+check("generated flow session ids use supported characters", /^[a-z0-9-]+$/.test(flowSessionA))
+check("separate logical flows receive separate sticky ids", flowSessionA !== flowSessionB)
+for (const hostileInput of ["", "   ", "隐私清理", "a_b c", "x".repeat(500)]) {
+  const normalized = proxySessionId(hostileInput)
+  check(`hostile proxy label is valid: ${JSON.stringify(hostileInput.slice(0, 12))}`, /^[a-z0-9-]{1,32}$/.test(normalized))
+  check(`proxy label normalization is idempotent: ${JSON.stringify(hostileInput.slice(0, 12))}`, proxySessionId(normalized) === normalized)
+}
 
 console.log("smoke: match scoring")
 const exact = scoreMatch("John Smith", "John Smith", ["123 Main St, Seattle, WA"], "Seattle", "WA")

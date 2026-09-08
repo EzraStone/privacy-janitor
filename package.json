@@ -15,7 +15,7 @@
     "scan": "node scripts/scan.mjs"
   },
   "dependencies": {
-    "@solarisdk/browser": "^0.1.1",
+    "@solarisdk/browser": "^0.1.3",
     "dotenv": "^17.2.0",
     "groq-sdk": "^0.30.0",
     "next": "^15.5.0",

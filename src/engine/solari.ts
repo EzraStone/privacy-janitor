@@ -3,18 +3,16 @@
  *
  * Every broker interaction runs through here so all sessions get the same
  * recipe: stealth + captcha solving + session recording + a sticky US
- * residential proxy (one consistent egress IP per run, so brokers don't see
- * us hop countries mid-flow).
+ * residential proxy. Callers can reuse one sticky label across multiple
+ * browser sessions that belong to the same logical flow.
  *
  * Encodes the Solari cookbook gotchas:
- *   - ALWAYS close the browser. On the pinned 0.1.1 the process never exits
- *     if you skip it; 0.1.3+ unrefs the listener, but closing still matters —
- *     an unclosed session keeps burning cloud browser time either way.
+ *   - ALWAYS close the browser so the remote session is released promptly
  *   - replay uploads are async — poll getReplayUrl for up to ~30s
  *   - stealth is a prerequisite for proxy + captcha
  */
 import { Solari } from "@solarisdk/browser"
-import { createHash } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { BrokerPage } from "@/types"
@@ -23,10 +21,18 @@ import { getEvidenceDir } from "../config/paths.ts"
 export interface RunEvidence {
   runId: string
   evidenceDir: string
+  proxySessionId: string
+  stealth: boolean
   screenshot: (name: string, png: Buffer) => string // returns saved path
   sessionId?: string
   replayUrl?: string
 }
+
+type SolariGlobal = typeof globalThis & {
+  __pjSolariClient?: Solari
+}
+
+const solariGlobal = globalThis as SolariGlobal
 
 export function getSolariClient(): Solari {
   const apiKey = process.env.SOLARI_API_KEY
@@ -35,20 +41,20 @@ export function getSolariClient(): Solari {
       "SOLARI_API_KEY is not set. Copy .env.example to .env and add your key from https://console.getsolari.com",
     )
   }
-  return new Solari({
+  // Reuse one SDK client across Next.js requests and development reloads. The
+  // SDK owns a loopback proxy listener; constructing a client per flow leaves
+  // unnecessary listeners alive in a long-running local server. A changed API
+  // key intentionally requires an app restart because this instance captures it.
+  return solariGlobal.__pjSolariClient ??= new Solari({
     apiKey,
     baseUrl: "https://api.getsolari.com",
   })
 }
 
 /**
- * Solari caps the sticky-proxy session id at 32 characters, and run ids are
- * human-readable enough to blow past it — `confirm-fastpeoplesearch-<ts>` is
- * already 33. An over-long id is not a loud failure: it costs you the pin, so
- * the residential egress rotates mid-flow and the broker sees the form load
- * and the submit arrive from different IPs. That is indistinguishable from a
- * session hijack, and it gets you challenged partway through a flow that was
- * working a second earlier.
+ * Solari documents sticky-proxy session ids as alphanumeric/dash labels with
+ * a 32-character maximum. Human-readable run ids can exceed that limit —
+ * `confirm-fastpeoplesearch-<ts>` is already 33 characters.
  *
  * Keep as much of the readable run id as fits, then a short digest so two runs
  * sharing a prefix still pin to different egress IPs.
@@ -56,16 +62,26 @@ export function getSolariClient(): Solari {
 const MAX_PROXY_SESSION_ID = 32
 
 export function proxySessionId(runId: string): string {
-  if (runId.length <= MAX_PROXY_SESSION_ID) return runId
-  const digest = createHash("sha256").update(runId).digest("hex").slice(0, 8)
-  return `${runId.slice(0, MAX_PROXY_SESSION_ID - digest.length - 1)}-${digest}`
+  const normalized = runId
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+  const source = normalized || `pj-${createHash("sha256").update(runId).digest("hex").slice(0, 12)}`
+  if (source.length <= MAX_PROXY_SESSION_ID) return source
+  const digest = createHash("sha256").update(source).digest("hex").slice(0, 8)
+  return `${source.slice(0, MAX_PROXY_SESSION_ID - digest.length - 1)}-${digest}`
+}
+
+export function createProxySessionId(scope: string): string {
+  const nonce = randomUUID().replace(/-/g, "").slice(0, 12)
+  return proxySessionId(`${scope}-${nonce}`)
 }
 
 /**
- * Minutes to hold one egress IP. Solari accepts 1-30, and the pin lapses on
- * the clock rather than on flow completion — so this is a hard ceiling on how
- * long a single broker flow can run before its IP rotates underneath it. 30 is
- * the maximum the API allows; there is no headroom left to buy.
+ * Minutes during which the same label can reconnect separate browser sessions
+ * to the same egress IP. Solari accepts 1-30 and the pin lapses on the clock,
+ * so preview and submit share the IP only when approval happens in this window.
+ * One still-open browser session already keeps its resolved proxy independently.
  */
 const PROXY_SESSION_MINUTES = 30
 
@@ -83,14 +99,14 @@ const DEFAULT_RECIPE = {
 
 export async function launchResilient(
   client: Solari,
-  runId: string,
+  stickySessionId: string,
 ): Promise<{ browser: Awaited<ReturnType<Solari["launch"]>>; stealth: boolean }> {
   try {
     const browser = await client.launch({
       ...STEALTH_RECIPE,
       proxy: {
         country: "us",
-        session: proxySessionId(runId),
+        session: proxySessionId(stickySessionId),
         sessionDuration: PROXY_SESSION_MINUTES,
       },
     })
@@ -123,15 +139,19 @@ export async function withBrokerSession<T>(
     evidence: RunEvidence,
     rawPage: Page,
   ) => Promise<T>,
+  options: { proxySessionId?: string } = {},
 ): Promise<{ result: T; evidence: RunEvidence }> {
   const client = getSolariClient()
   const runId = `${flowName}-${Date.now().toString(36)}`
+  const stickySessionId = proxySessionId(options.proxySessionId ?? runId)
   const evidenceDir = join(getEvidenceDir(), runId)
   mkdirSync(evidenceDir, { recursive: true })
 
   const evidence: RunEvidence = {
     runId,
     evidenceDir,
+    proxySessionId: stickySessionId,
+    stealth: false,
     screenshot: (name: string, png: Buffer) => {
       const p = join(evidenceDir, `${name}.png`)
       writeFileSync(p, png)
@@ -139,9 +159,10 @@ export async function withBrokerSession<T>(
     },
   }
 
-  const { browser } = await launchResilient(client, runId)
+  const { browser, stealth } = await launchResilient(client, stickySessionId)
 
   evidence.sessionId = browser.id
+  evidence.stealth = stealth
 
   try {
     const rawPage = await browser.newPage()
@@ -151,7 +172,7 @@ export async function withBrokerSession<T>(
     const result = await fn(page, evidence, rawPage)
     return { result, evidence }
   } finally {
-    await browser.close() // never skip: hangs on 0.1.1, leaks the session on any version
+    await browser.close()
   }
 }
 
