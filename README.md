@@ -47,7 +47,7 @@ flowchart LR
     B["🙋 2 · This is me<br/>confirm each hit<br/>namesakes rejected"]
     C["📊 3 · Exposure score<br/>LLM ranks risk<br/>PII-redacted prompts"]
     D["✋ 4 · Opt-out<br/>agent fills the form<br/>you approve → submit"]
-    E["🔁 5 · Re-scan diff<br/>removed ✓<br/>relisted ⚠"]
+    E["🔁 5 · Re-scan diff<br/>clear ✓ · relisted ⚠<br/>blocked ?"]
 
     A --> B --> C --> D --> E
     E -. "relisted — go again" .-> D
@@ -72,8 +72,10 @@ opt-out flow keeps the same residential IP while Solari's 30-minute pin remains 
   until you click approve.
 - 🧾 **Evidence for every action** — full-page screenshots on disk plus a Solari session replay
   for the scan, the submit, and the email confirmation.
-- 🔁 **Proof of removal** — re-scans diff against the last run and split results into removed,
-  still-listed, and relisted.
+- 🔁 **Conservative removal verification** — re-scans record `found`, `clear`, or
+  `inconclusive` per broker. Only a recognized no-results page marks a listing absent;
+  challenges and unfamiliar pages keep the prior state, and listing/submission history is
+  retained so relists stay visible.
 - 💾 **Resumable scans** — broker-by-broker progress is saved locally, so reopening the app
   continues an interrupted scan without repeating completed brokers.
 - 🗄️ **No account, no backend** — `node:sqlite` (zero native deps) on localhost. No sign-up, no

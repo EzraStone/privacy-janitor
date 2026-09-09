@@ -143,8 +143,12 @@ export default function Home() {
   )
   const scopedScans = (state?.scans ?? []).filter((s) => s.identityId === activeIdentityId)
   const confirmedListings = scopedListings.filter((l) => l.confirmedMine === true)
-  const pendingListings = scopedListings.filter((l) => l.confirmedMine === null)
+  const presentConfirmedListings = confirmedListings.filter((l) => l.presenceStatus !== "absent")
+  const pendingListings = scopedListings.filter(
+    (l) => l.confirmedMine === null && l.presenceStatus !== "absent",
+  )
   const activeScan = scopedScans.find((s) => !s.finishedAt)
+  const latestRescan = scopedScans.find((s) => s.kind === "rescan")
 
   return (
     <main className="mx-auto max-w-6xl space-y-8 px-5 py-12 sm:px-8 sm:py-16">
@@ -322,7 +326,7 @@ export default function Home() {
       )}
 
       {/* ── Exposure score ──────────────────────────────────────────── */}
-      {identity && confirmedListings.length > 0 && (
+      {identity && presentConfirmedListings.length > 0 && (
         <section className="panel space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
@@ -347,7 +351,7 @@ export default function Home() {
               <p className="text-sm text-zinc-400">{report.summary}</p>
               <div className="space-y-2">
                 {report.rankings.map((r) => {
-                  const listing = confirmedListings.find((l) => l.id === r.listingId)
+                  const listing = presentConfirmedListings.find((l) => l.id === r.listingId)
                   return (
                     <div key={r.listingId} className="card space-y-1 text-sm">
                       <div className="flex justify-between font-medium">
@@ -367,7 +371,7 @@ export default function Home() {
             </div>
           ) : (
             <p className="text-sm text-zinc-400">
-              {confirmedListings.length} confirmed listing(s) for {identity.fullName}. Rank them
+              {presentConfirmedListings.length} visible confirmed listing(s) for {identity.fullName}. Rank them
               by risk to know which to kill first (optional — requires GROQ_API_KEY).
             </p>
           )}
@@ -421,15 +425,36 @@ export default function Home() {
           <h2 className="text-xl font-semibold tracking-tight">Verify removals</h2>
           <p className="text-sm leading-6 text-zinc-500">
             Brokers relist data. Re-run the scan after a few days — removed listings that
-            reappear get flagged.
+            reappear get flagged. A blocked or unfamiliar broker page is reported as
+            inconclusive and never counted as a removal.
           </p>
           <button
             className="btn-secondary"
-            disabled={!!busy}
-            onClick={() => void stateAction({ action: "scan", identityId: identity.id }, "scan")}
+            disabled={!!busy || Boolean(activeScan)}
+            onClick={() => void stateAction({ action: "rescan", identityId: identity.id }, "rescan")}
           >
-            Re-scan & diff
+            {activeScan?.kind === "rescan" || busy === "rescan" ? "Verifying…" : "Re-scan & diff"}
           </button>
+          {latestRescan?.finishedAt && (
+            <div className="card space-y-2 text-sm">
+              <div className="font-medium text-zinc-200">
+                Latest verification: {latestRescan.results.some((r) => r.outcome === "inconclusive")
+                  ? "incomplete — review broker warnings"
+                  : "complete"}
+              </div>
+              {latestRescan.events.length === 0 ? (
+                <p className="text-zinc-500">No listing changes were recorded.</p>
+              ) : (
+                <div className="space-y-1 text-zinc-400">
+                  {latestRescan.events.map((event) => (
+                    <div key={`${event.brokerId}-${event.listingId}-${event.type}`}>
+                      {event.brokerId}: {event.type.replaceAll("_", " ")}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
 
@@ -442,13 +467,15 @@ export default function Home() {
             {[...scopedScans].reverse().map((s) => (
               <div key={s.id} className="card">
                 <div className="text-zinc-300">
-                  {new Date(s.startedAt).toLocaleString()} —{" "}
+                  {new Date(s.startedAt).toLocaleString()} · {s.kind} —{" "}
                   {s.finishedAt ? `${s.results.length} broker(s) done` : "running…"}
                 </div>
                 <div className="mt-1 space-y-1">
                   {s.results.map((r) => (
                     <div key={r.brokerId} className={r.ok ? "text-zinc-300" : "text-zinc-500"}>
-                      {r.ok ? "✓" : "×"} {r.brokerId}: {r.ok ? `${r.listingsFound} listing(s)` : `error — ${r.error}`}
+                      {r.outcome === "inconclusive" ? "⚠" : "✓"} {r.brokerId}: {r.outcome}
+                      {r.outcome === "found" ? ` — ${r.listingsFound} listing(s)` : ""}
+                      {r.error ? ` — ${r.error}` : ""}
                     </div>
                   ))}
                 </div>
@@ -598,6 +625,8 @@ function OptOutRow({
   onCancel: () => void
   onConfirmEmail: () => void
 }) {
+  const isAbsent = listing.presenceStatus === "absent"
+  const isRelisted = !isAbsent && sub?.status === "removed"
   return (
     <div className="card space-y-3 text-sm">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -606,7 +635,13 @@ function OptOutRow({
           <div className="text-zinc-400">{listing.brokerId}</div>
         </div>
         <div className={sub?.status === "failed" ? "text-zinc-500" : sub?.status === "removed" ? "text-white" : "text-zinc-400"}>
-          {sub ? statusLabel[sub.status] : "Not started"}
+          {isRelisted
+            ? "Relisted — removal needed again"
+            : isAbsent && !sub
+              ? "No longer visible; no removal was submitted"
+              : sub
+                ? statusLabel[sub.status]
+                : "Not started"}
         </div>
       </div>
 
@@ -624,13 +659,24 @@ function OptOutRow({
         </div>
       )}
 
-      {!sub && (
+      {(!sub || isRelisted) && !isAbsent && (
         <button className="btn-primary" disabled={!contactEmail || !!busy} onClick={onPrepare} title={!contactEmail ? "Set a contact email above first" : ""}>
-          {busy === `p-${listing.id}` ? "Filling form (Solari session)…" : "Prepare opt-out"}
+          {busy === `p-${listing.id}`
+            ? "Filling form (Solari session)…"
+            : isRelisted
+              ? "Prepare another opt-out"
+              : "Prepare opt-out"}
         </button>
       )}
 
-      {sub?.status === "prepared" && (
+      {isAbsent && (sub?.status === "prepared" || sub?.status === "awaiting_email") && (
+        <p className="text-zinc-400">
+          This listing is currently absent, so PrivacyJanitor will not send another broker
+          action. Re-scan if it reappears.
+        </p>
+      )}
+
+      {!isAbsent && sub?.status === "prepared" && (
         <div className="flex gap-2 flex-wrap">
           <button className="btn-primary" disabled={!!busy} onClick={onApprove}>
             {busy === `a-${listing.id}` ? "Submitting…" : "Approve & submit"}
@@ -639,7 +685,7 @@ function OptOutRow({
         </div>
       )}
 
-      {(sub?.status === "awaiting_email" || sub?.status === "submitted") && (
+      {!isAbsent && (sub?.status === "awaiting_email" || sub?.status === "submitted") && (
         <div className="space-y-2">
           <p className="text-zinc-400">
             Check your inbox for the broker&apos;s confirmation email, paste the link here, and

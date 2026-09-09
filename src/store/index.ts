@@ -10,10 +10,14 @@ import { mkdirSync } from "node:fs"
 import { dirname } from "node:path"
 import { getDatabasePath } from "../config/paths.ts"
 import type {
+  BrokerScanObservation,
   Identity,
   Listing,
   OptOutReceipt,
   PreparedOptOut,
+  ScanBrokerResult,
+  ScanKind,
+  ScanListingEvent,
   ScanRun,
   Submission,
   SubmissionStatus,
@@ -58,7 +62,10 @@ function migrate(db: DatabaseSync): void {
       confirmed_mine INTEGER,
       raw_snippet TEXT,
       first_seen_at TEXT NOT NULL,
-      last_seen_at TEXT NOT NULL
+      last_seen_at TEXT NOT NULL,
+      presence_status TEXT NOT NULL DEFAULT 'seen',
+      last_checked_at TEXT,
+      last_absent_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS submissions (
@@ -71,6 +78,7 @@ function migrate(db: DatabaseSync): void {
       confirm_session_id TEXT,
       preview_screenshot_path TEXT,
       result_screenshot_path TEXT,
+      confirm_evidence_dir TEXT,
       removed_verified_at TEXT,
       last_error TEXT,
       attempts INTEGER NOT NULL DEFAULT 0
@@ -81,7 +89,9 @@ function migrate(db: DatabaseSync): void {
       identity_id TEXT NOT NULL,
       started_at TEXT NOT NULL,
       finished_at TEXT,
-      results TEXT NOT NULL DEFAULT '[]'
+      results TEXT NOT NULL DEFAULT '[]',
+      kind TEXT NOT NULL DEFAULT 'scan',
+      events TEXT NOT NULL DEFAULT '[]'
     );
 
     CREATE TABLE IF NOT EXISTS prepared_optouts (
@@ -93,17 +103,58 @@ function migrate(db: DatabaseSync): void {
   `)
 
   // ── migrations for pre-existing databases ─────────────────────────────────
-  // Additive columns only; wrapped in try/catch because ALTER TABLE throws
-  // if the column already exists (node:sqlite has no IF NOT EXISTS).
-  const migrations: Array<[string, string]> = [
-    ["submissions", "ALTER TABLE submissions ADD COLUMN confirm_evidence_dir TEXT"],
-  ]
-  for (const [table, sql] of migrations) {
-    try {
-      db.exec(sql)
-    } catch {
-      // column already present
+  // Inspect the schema first so only "already exists" is ignored. Any real
+  // migration failure aborts startup with its original SQLite error.
+  db.exec("BEGIN")
+  try {
+    ensureColumn(db, "submissions", "confirm_evidence_dir", "TEXT")
+    ensureColumn(db, "listings", "presence_status", "TEXT NOT NULL DEFAULT 'seen'")
+    ensureColumn(db, "listings", "last_checked_at", "TEXT")
+    ensureColumn(db, "listings", "last_absent_at", "TEXT")
+    ensureColumn(db, "scan_runs", "kind", "TEXT NOT NULL DEFAULT 'scan'")
+    ensureColumn(db, "scan_runs", "events", "TEXT NOT NULL DEFAULT '[]'")
+
+    // Older builds could leave more than one unfinished row. Close all but
+    // the newest before enforcing the single-active-run invariant.
+    const unfinished = db
+      .prepare(
+        "SELECT id, identity_id FROM scan_runs WHERE finished_at IS NULL ORDER BY started_at DESC",
+      )
+      .all() as Array<{ id: string; identity_id: string }>
+    const newestByIdentity = new Set<string>()
+    const migratedAt = new Date().toISOString()
+    for (const run of unfinished) {
+      if (newestByIdentity.has(run.identity_id)) {
+        db.prepare("UPDATE scan_runs SET finished_at = ? WHERE id = ?").run(migratedAt, run.id)
+      } else {
+        newestByIdentity.add(run.identity_id)
+      }
     }
+
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_listings_identity_broker
+        ON listings(identity_id, broker_id);
+      CREATE INDEX IF NOT EXISTS idx_submissions_listing_created
+        ON submissions(listing_id, created_at DESC);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_scan_runs_one_unfinished_identity
+        ON scan_runs(identity_id) WHERE finished_at IS NULL;
+    `)
+    db.exec("COMMIT")
+  } catch (err) {
+    db.exec("ROLLBACK")
+    throw err
+  }
+}
+
+function ensureColumn(
+  db: DatabaseSync,
+  table: string,
+  column: string,
+  definition: string,
+): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+  if (!columns.some((candidate) => candidate.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
   }
 }
 
@@ -222,6 +273,12 @@ export function deleteIdentity(identityId: string): string[] {
     for (const row of listingDirs) {
       if (row.screenshot_path) evidenceDirs.push(row.screenshot_path)
     }
+    collectScanEvidence(
+      db.prepare("SELECT results FROM scan_runs WHERE identity_id = ?").all(identityId) as Array<{
+        results: string
+      }>,
+      evidenceDirs,
+    )
 
     db.prepare("DELETE FROM listings WHERE identity_id = ?").run(identityId)
     db.prepare("DELETE FROM scan_runs WHERE identity_id = ?").run(identityId)
@@ -277,6 +334,10 @@ export function resetAll(): { evidenceDirs: string[] } {
         }
       }
     }
+    collectScanEvidence(
+      db.prepare("SELECT results FROM scan_runs").all() as Array<{ results: string }>,
+      evidenceDirs,
+    )
 
     db.exec("DELETE FROM submissions")
     db.exec("DELETE FROM prepared_optouts")
@@ -291,6 +352,21 @@ export function resetAll(): { evidenceDirs: string[] } {
   }
 }
 
+function collectScanEvidence(rows: Array<{ results: string }>, target: string[]): void {
+  for (const row of rows) {
+    try {
+      const results = JSON.parse(row.results) as Array<{ evidenceDir?: unknown }>
+      for (const result of results) {
+        if (typeof result.evidenceDir === "string" && !target.includes(result.evidenceDir)) {
+          target.push(result.evidenceDir)
+        }
+      }
+    } catch {
+      /* legacy/corrupt result JSON has no recoverable evidence path */
+    }
+  }
+}
+
 // ── listings ────────────────────────────────────────────────────────────────
 
 export function upsertListing(listing: Listing): void {
@@ -298,12 +374,16 @@ export function upsertListing(listing: Listing): void {
     .prepare(
       `INSERT INTO listings
          (id, broker_id, identity_id, url, display_name, exposed_data,
-          screenshot_path, confirmed_mine, raw_snippet, first_seen_at, last_seen_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          screenshot_path, confirmed_mine, raw_snippet, first_seen_at, last_seen_at,
+          presence_status, last_checked_at, last_absent_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          url=excluded.url, display_name=excluded.display_name,
          exposed_data=excluded.exposed_data, screenshot_path=excluded.screenshot_path,
-         confirmed_mine=excluded.confirmed_mine, last_seen_at=excluded.last_seen_at`,
+         confirmed_mine=excluded.confirmed_mine, last_seen_at=excluded.last_seen_at,
+         presence_status=excluded.presence_status,
+         last_checked_at=excluded.last_checked_at,
+         last_absent_at=COALESCE(excluded.last_absent_at, listings.last_absent_at)`,
     )
     .run(
       listing.id,
@@ -317,6 +397,9 @@ export function upsertListing(listing: Listing): void {
       listing.rawSnippet ?? null,
       listing.firstSeenAt,
       listing.lastSeenAt,
+      listing.presenceStatus ?? "seen",
+      listing.lastCheckedAt ?? null,
+      listing.lastAbsentAt ?? null,
     )
 }
 
@@ -354,6 +437,186 @@ function rowToListing(r: Record<string, unknown>): Listing {
     rawSnippet: (r.raw_snippet as string) ?? undefined,
     firstSeenAt: r.first_seen_at as string,
     lastSeenAt: r.last_seen_at as string,
+    presenceStatus: ((r.presence_status as string) || "seen") as Listing["presenceStatus"],
+    lastCheckedAt: (r.last_checked_at as string) ?? undefined,
+    lastAbsentAt: (r.last_absent_at as string) ?? undefined,
+  }
+}
+
+function canonicalListingUrl(raw: string): string {
+  try {
+    const url = new URL(raw)
+    const pathname = url.pathname.replace(/\/+$/, "") || "/"
+    url.searchParams.sort()
+    return `${url.protocol.toLowerCase()}//${url.host.toLowerCase()}${pathname}${url.search}`
+  } catch {
+    return raw.trim().toLowerCase()
+  }
+}
+
+/**
+ * Atomically apply one broker observation. Inconclusive scans may add records
+ * that were positively seen, but they can never mark an older record absent.
+ */
+export function recordBrokerScanObservation(input: {
+  identityId: string
+  brokerId: string
+  runKind: ScanKind
+  observation: BrokerScanObservation
+  evidenceDir: string
+  /** When supplied together, broker state + run checkpoint commit atomically. */
+  runId?: string
+  result?: ScanBrokerResult
+}): ScanListingEvent[] {
+  if (Boolean(input.runId) !== Boolean(input.result)) {
+    throw new Error("runId and result must be supplied together")
+  }
+  const db = open()
+  const now = new Date().toISOString()
+  const events: ScanListingEvent[] = []
+
+  db.exec("BEGIN IMMEDIATE")
+  try {
+    let checkpoint:
+      | { results: ScanBrokerResult[]; events: ScanListingEvent[] }
+      | undefined
+    if (input.runId && input.result) {
+      const row = db
+        .prepare(
+          "SELECT identity_id, finished_at, results, kind, events FROM scan_runs WHERE id = ?",
+        )
+        .get(input.runId) as
+        | {
+            identity_id: string
+            finished_at: string | null
+            results: string
+            kind: ScanKind
+            events: string
+          }
+        | undefined
+      if (!row || row.finished_at) throw new Error(`active scan ${input.runId} not found`)
+      if (row.identity_id !== input.identityId || row.kind !== input.runKind) {
+        throw new Error(`scan ${input.runId} does not match this broker observation`)
+      }
+      if (input.result.brokerId !== input.brokerId) {
+        throw new Error("broker result does not match the observation")
+      }
+      if (
+        input.result.outcome !== input.observation.outcome ||
+        input.result.listingsFound !== input.observation.listings.length
+      ) {
+        throw new Error("broker checkpoint does not match the observed outcome")
+      }
+      const results = JSON.parse(row.results) as ScanBrokerResult[]
+      if (results.some((result) => result.brokerId === input.brokerId)) {
+        throw new Error(`${input.brokerId} is already checkpointed for scan ${input.runId}`)
+      }
+      checkpoint = {
+        results,
+        events: JSON.parse(row.events) as ScanListingEvent[],
+      }
+    }
+
+    const existing = (
+      db
+        .prepare("SELECT * FROM listings WHERE identity_id = ? AND broker_id = ?")
+        .all(input.identityId, input.brokerId) as Array<Record<string, unknown>>
+    ).map(rowToListing)
+    const byUrl = new Map(existing.map((listing) => [canonicalListingUrl(listing.url), listing]))
+    const freshKeys = new Set<string>()
+
+    for (const incoming of input.observation.listings) {
+      const key = canonicalListingUrl(incoming.url)
+      if (freshKeys.has(key)) continue
+      freshKeys.add(key)
+      const prior = byUrl.get(key)
+      const listing: Listing = {
+        ...incoming,
+        id: prior?.id ?? incoming.id,
+        confirmedMine: prior?.confirmedMine ?? incoming.confirmedMine,
+        firstSeenAt: prior?.firstSeenAt ?? incoming.firstSeenAt,
+        lastSeenAt: now,
+        screenshotPath: input.evidenceDir,
+        presenceStatus: "seen",
+        lastCheckedAt: now,
+        lastAbsentAt: prior?.lastAbsentAt,
+      }
+      upsertListing(listing)
+
+      if (input.runKind === "rescan") {
+        events.push({
+          listingId: listing.id,
+          brokerId: input.brokerId,
+          type: prior?.presenceStatus === "absent"
+            ? "relisted"
+            : prior
+              ? "still_listed"
+              : "new",
+          recordedAt: now,
+        })
+      }
+    }
+
+    // A positive result proves only what was seen; it does not prove every
+    // older, unreturned result is gone (ranking, infinite scroll, and query
+    // drift can all hide candidates). Broker-wide absence requires the
+    // adapter's explicit, non-paginated zero-results state.
+    if (input.runKind === "rescan" && input.observation.outcome === "clear") {
+      for (const prior of existing) {
+        if (freshKeys.has(canonicalListingUrl(prior.url))) continue
+
+        db.prepare(
+          `UPDATE listings
+           SET presence_status = 'absent', last_checked_at = ?, last_absent_at = ?
+           WHERE id = ?`,
+        ).run(now, now, prior.id)
+
+        const submission = db
+          .prepare(
+            `SELECT id, status FROM submissions
+             WHERE listing_id = ? AND status IN ('submitted', 'confirmed', 'removed')
+             ORDER BY created_at DESC LIMIT 1`,
+          )
+          .get(prior.id) as { id: string; status: SubmissionStatus } | undefined
+        const removalWasActioned = Boolean(submission)
+
+        let type: ScanListingEvent["type"]
+        if (prior.presenceStatus === "absent") {
+          type = removalWasActioned ? "still_removed" : "no_longer_seen"
+        } else if (removalWasActioned) {
+          type = "removed"
+          if (submission && submission.status !== "removed") {
+            db.prepare(
+              `UPDATE submissions
+               SET status = 'removed', updated_at = ?,
+                   removed_verified_at = COALESCE(removed_verified_at, ?)
+               WHERE id = ?`,
+            ).run(now, now, submission.id)
+          }
+        } else {
+          type = "no_longer_seen"
+        }
+
+        events.push({ listingId: prior.id, brokerId: input.brokerId, type, recordedAt: now })
+      }
+    }
+
+    if (checkpoint && input.runId && input.result) {
+      checkpoint.results.push(input.result)
+      checkpoint.events.push(...events)
+      const saved = db
+        .prepare(
+          "UPDATE scan_runs SET results = ?, events = ? WHERE id = ? AND finished_at IS NULL",
+        )
+        .run(JSON.stringify(checkpoint.results), JSON.stringify(checkpoint.events), input.runId)
+      if (saved.changes !== 1) throw new Error(`scan ${input.runId} could not be checkpointed`)
+    }
+
+    db.exec("COMMIT")
+    return events
+  } catch (err) {
+    db.exec("ROLLBACK")
+    throw err
   }
 }
 
@@ -464,16 +727,20 @@ export function listSubmissions(listingId?: string): Submission[] {
 
 // ── scan runs ───────────────────────────────────────────────────────────────
 
-export function createScanRun(identityId: string): ScanRun {
+export function createScanRun(identityId: string, kind: ScanKind = "scan"): ScanRun {
   const run: ScanRun = {
     id: newId("scan"),
     identityId,
+    kind,
     startedAt: new Date().toISOString(),
     results: [],
+    events: [],
   }
   open()
-    .prepare("INSERT INTO scan_runs (id, identity_id, started_at, results) VALUES (?, ?, ?, '[]')")
-    .run(run.id, run.identityId, run.startedAt)
+    .prepare(
+      "INSERT INTO scan_runs (id, identity_id, started_at, results, kind, events) VALUES (?, ?, ?, '[]', ?, '[]')",
+    )
+    .run(run.id, run.identityId, run.startedAt, run.kind)
   return run
 }
 
@@ -487,16 +754,16 @@ export function getScanRun(id: string): ScanRun | undefined {
 /** Persist broker-by-broker progress so an interrupted scan can resume. */
 export function saveScanRunProgress(run: ScanRun): boolean {
   const result = open()
-    .prepare("UPDATE scan_runs SET results = ? WHERE id = ?")
-    .run(JSON.stringify(run.results), run.id)
+    .prepare("UPDATE scan_runs SET results = ?, events = ? WHERE id = ?")
+    .run(JSON.stringify(run.results), JSON.stringify(run.events), run.id)
   return result.changes > 0
 }
 
 export function finishScanRun(run: ScanRun): void {
   run.finishedAt = new Date().toISOString()
   open()
-    .prepare("UPDATE scan_runs SET finished_at = ?, results = ? WHERE id = ?")
-    .run(run.finishedAt, JSON.stringify(run.results), run.id)
+    .prepare("UPDATE scan_runs SET finished_at = ?, results = ?, events = ? WHERE id = ?")
+    .run(run.finishedAt, JSON.stringify(run.results), JSON.stringify(run.events), run.id)
 }
 
 export function listScanRuns(identityId?: string): ScanRun[] {
@@ -510,12 +777,27 @@ export function listScanRuns(identityId?: string): ScanRun[] {
 }
 
 function rowToScanRun(r: Record<string, unknown>): ScanRun {
+  const rawResults = JSON.parse(r.results as string) as Array<Record<string, unknown>>
   return {
     id: r.id as string,
     identityId: r.identity_id as string,
+    kind: ((r.kind as string) || "scan") as ScanKind,
     startedAt: r.started_at as string,
     finishedAt: (r.finished_at as string) ?? undefined,
-    results: JSON.parse(r.results as string),
+    results: rawResults.map((result) => {
+      const outcome = (result.outcome as string | undefined) ??
+        (result.ok && Number(result.listingsFound) > 0 ? "found" : "inconclusive")
+      return {
+        brokerId: result.brokerId as string,
+        ok: outcome !== "inconclusive",
+        outcome: outcome as ScanRun["results"][number]["outcome"],
+        listingsFound: Number(result.listingsFound) || 0,
+        issueCode: result.issueCode as ScanRun["results"][number]["issueCode"],
+        error: result.error as string | undefined,
+        evidenceDir: result.evidenceDir as string | undefined,
+      }
+    }),
+    events: r.events ? JSON.parse(r.events as string) : [],
   }
 }
 

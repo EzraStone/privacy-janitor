@@ -17,7 +17,16 @@ import type {
   PreparedOptOut,
 } from "@/types"
 import { newId } from "../store/index.ts"
-import { firstVisible, tryAllTexts, tryClick, tryInnerText, scoreMatch, isPersonProfileSlug } from "./helpers.ts"
+import {
+  classifyBrokerScan,
+  firstVisible,
+  inspectBrokerSearchPage,
+  tryAllTexts,
+  tryClick,
+  tryInnerText,
+  scoreMatch,
+  isPersonProfileSlug,
+} from "./helpers.ts"
 
 const OPTOUT_URL = "https://www.spokeo.com/optout"
 
@@ -33,7 +42,7 @@ export const spokeo: BrokerAdapter = {
 
   // ── scan ───────────────────────────────────────────────────────────────────
 
-  async scan(page, identity): Promise<Listing[]> {
+  async scan(page, identity) {
     const listings: Listing[] = []
     const now = new Date().toISOString()
 
@@ -66,7 +75,9 @@ export const spokeo: BrokerAdapter = {
 
     // Collect person-profile links: /First-Last/State/City/p<digits>
     const anchors = page.locator("a")
-    const count = Math.min(await anchors.count(), 200)
+    const anchorCount = await anchors.count()
+    const traversalLimit = 300
+    const count = Math.min(anchorCount, traversalLimit)
     const urls: string[] = []
 
     for (let i = 0; i < count; i++) {
@@ -80,8 +91,20 @@ export const spokeo: BrokerAdapter = {
       urls.push(url.split("?")[0])
     }
 
+    const profileUrls = [...new Set(urls)]
+    const searchEvidence = await inspectBrokerSearchPage(page, {
+      noResultMarkers: ["no results found", "no matches found", "0 results"],
+      noResultSelectors: [
+        '[data-testid*="search-empty" i]',
+        '[class*="search-empty" i]',
+        '[class*="zero-results" i]',
+      ],
+    })
+    const candidateLimit = 5
+    let failedProfiles = 0
+
     // Visit each profile (capped) and scrape exposed data.
-    for (const url of [...new Set(urls)].slice(0, 5)) {
+    for (const url of profileUrls.slice(0, candidateLimit)) {
       try {
         await page.goto(url, { waitUntil: "domcontentloaded" })
         await page.waitForTimeout(2_500)
@@ -126,11 +149,22 @@ export const spokeo: BrokerAdapter = {
           lastSeenAt: now,
         })
       } catch {
+        failedProfiles++
         continue
       }
     }
 
-    return listings
+    const observation = classifyBrokerScan({
+      listings,
+      candidateCount: profileUrls.length,
+      failedProfiles,
+      candidateLimit,
+      searchPageText: searchEvidence.pageText,
+      explicitNoResults: searchEvidence.explicitNoResults,
+      hasMoreResults: searchEvidence.hasMoreResults,
+      traversalTruncated: anchorCount > traversalLimit,
+    })
+    return { ...observation, searchScreenshot: searchEvidence.screenshot }
   },
 
   // ── match confidence ─────────────────────────────────────────────────────

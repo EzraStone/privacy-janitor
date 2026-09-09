@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
       action:
         | "save-identity"
         | "scan"
+        | "rescan"
         | "confirm-listing"
         | "reject-listing"
         | "delete-identity"
@@ -58,10 +59,17 @@ export async function POST(req: NextRequest) {
         return ok({ identity })
       }
 
-      case "scan": {
+      case "scan":
+      case "rescan": {
         if (!body.identityId) return fail("identityId required")
         if (!store.getIdentity(body.identityId)) return fail("identity not found", 404)
-        const { run, resumed } = startScan(body.identityId)
+        const { run, resumed, conflict } = startScan(
+          body.identityId,
+          body.action === "rescan" ? "rescan" : "scan",
+        )
+        if (conflict) {
+          return fail(`a ${run.kind} is already running for this profile`, 409)
+        }
         return ok({ started: true, resumed, identityId: body.identityId, runId: run.id })
       }
 

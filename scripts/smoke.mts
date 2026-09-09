@@ -12,7 +12,11 @@
  */
 import { adapters } from "../src/adapters/registry.ts"
 import { createProxySessionId, proxySessionId } from "../src/engine/solari.ts"
-import { scoreMatch } from "../src/adapters/helpers.ts"
+import {
+  classifyBrokerScan,
+  isNoResultText,
+  scoreMatch,
+} from "../src/adapters/helpers.ts"
 import { buildRedactionMap, redactText, redactListing } from "../src/scoring/redact.ts"
 import type { Identity, Listing } from "../src/types.ts"
 
@@ -97,6 +101,83 @@ const listing = {
   firstSeenAt: new Date().toISOString(),
   lastSeenAt: new Date().toISOString(),
 }
+
+console.log("smoke: conservative broker scan outcomes")
+check("zero-result text does not match 10 results", !isNoResultText("10 results", ["0 results"]))
+check("standalone zero-result text is recognized", isNoResultText("Showing 0 results", ["0 results"]))
+check(
+  "recognized no-results page is clear",
+  classifyBrokerScan({
+    listings: [],
+    candidateCount: 0,
+    failedProfiles: 0,
+    candidateLimit: 5,
+    searchPageText: "No results found for this search",
+    explicitNoResults: true,
+    hasMoreResults: false,
+  }).outcome === "clear",
+)
+check(
+  "unknown empty page is inconclusive",
+  classifyBrokerScan({
+    listings: [],
+    candidateCount: 0,
+    failedProfiles: 0,
+    candidateLimit: 5,
+    searchPageText: "Welcome back",
+    explicitNoResults: false,
+    hasMoreResults: false,
+  }).outcome === "inconclusive",
+)
+check(
+  "broker challenge cannot be treated as clear",
+  classifyBrokerScan({
+    listings: [],
+    candidateCount: 0,
+    failedProfiles: 0,
+    candidateLimit: 5,
+    searchPageText: "Verify you are human. No results found.",
+    explicitNoResults: true,
+    hasMoreResults: false,
+  }).outcome === "inconclusive",
+)
+check(
+  "partial profile extraction is inconclusive",
+  classifyBrokerScan({
+    listings: [listing],
+    candidateCount: 2,
+    failedProfiles: 1,
+    candidateLimit: 5,
+    searchPageText: "Search results",
+    explicitNoResults: false,
+    hasMoreResults: false,
+  }).outcome === "inconclusive",
+)
+check(
+  "pagination prevents a conclusive scan",
+  classifyBrokerScan({
+    listings: [listing],
+    candidateCount: 1,
+    failedProfiles: 0,
+    candidateLimit: 5,
+    searchPageText: "Search results",
+    explicitNoResults: false,
+    hasMoreResults: true,
+  }).outcome === "inconclusive",
+)
+check(
+  "candidate cap prevents a conclusive scan",
+  classifyBrokerScan({
+    listings: [listing],
+    candidateCount: 5,
+    failedProfiles: 0,
+    candidateLimit: 5,
+    searchPageText: "Search results",
+    explicitNoResults: false,
+    hasMoreResults: false,
+  }).outcome === "inconclusive",
+)
+
 const map = buildRedactionMap(identity, [listing])
 const redacted = redactListing(listing, map)
 check("listing text has no raw name", !redacted.includes("Jane Doe"))

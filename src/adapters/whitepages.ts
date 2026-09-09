@@ -22,7 +22,15 @@ import type {
   PreparedOptOut,
 } from "@/types"
 import { newId } from "../store/index.ts"
-import { firstVisible, tryAllTexts, tryInnerText, scoreMatch, isPersonProfileSlug } from "./helpers.ts"
+import {
+  classifyBrokerScan,
+  firstVisible,
+  inspectBrokerSearchPage,
+  tryAllTexts,
+  tryInnerText,
+  scoreMatch,
+  isPersonProfileSlug,
+} from "./helpers.ts"
 
 const SUPPRESSION_URL = "https://www.whitepages.com/suppression_requests"
 
@@ -47,7 +55,7 @@ export const whitepages: BrokerAdapter = {
 
   // ── scan ───────────────────────────────────────────────────────────────────
 
-  async scan(page, identity): Promise<Listing[]> {
+  async scan(page, identity) {
     const listings: Listing[] = []
     const now = new Date().toISOString()
 
@@ -82,10 +90,21 @@ export const whitepages: BrokerAdapter = {
     await page.waitForTimeout(4_000) // results render client-side
 
     // 2. Collect profile links from result cards.
-    const profileUrls = await extractProfileUrls(page, identity)
+    const extracted = await extractProfileUrls(page, identity)
+    const profileUrls = extracted.urls
+    const searchEvidence = await inspectBrokerSearchPage(page, {
+      noResultMarkers: ["no results found", "no people found", "0 results"],
+      noResultSelectors: [
+        '[data-testid*="search-empty" i]',
+        '[class*="search-empty" i]',
+        '#search-results [role="status"]',
+      ],
+    })
+    const candidateLimit = 5
+    let failedProfiles = 0
 
     // 3. Visit each profile (capped) and scrape exposed data.
-    for (const url of profileUrls.slice(0, 5)) {
+    for (const url of profileUrls.slice(0, candidateLimit)) {
       try {
         await page.goto(url, { waitUntil: "domcontentloaded" })
         await page.waitForTimeout(2_500)
@@ -132,11 +151,22 @@ export const whitepages: BrokerAdapter = {
         })
       } catch {
         // A bad profile page shouldn't kill the whole scan.
+        failedProfiles++
         continue
       }
     }
 
-    return listings
+    const observation = classifyBrokerScan({
+      listings,
+      candidateCount: profileUrls.length,
+      failedProfiles,
+      candidateLimit,
+      searchPageText: searchEvidence.pageText,
+      explicitNoResults: searchEvidence.explicitNoResults,
+      hasMoreResults: searchEvidence.hasMoreResults,
+      traversalTruncated: extracted.truncated,
+    })
+    return { ...observation, searchScreenshot: searchEvidence.screenshot }
   },
 
   // ── match confidence ─────────────────────────────────────────────────────
@@ -276,12 +306,16 @@ export const whitepages: BrokerAdapter = {
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-async function extractProfileUrls(page: BrokerPage, identity: Identity): Promise<string[]> {
+async function extractProfileUrls(
+  page: BrokerPage,
+  identity: Identity,
+): Promise<{ urls: string[]; truncated: boolean }> {
   const hrefs: string[] = []
 
   const anchors = page.locator('a[href*="/name/"]')
   const count = await anchors.count()
-  for (let i = 0; i < count && i < 60; i++) {
+  const traversalLimit = 300
+  for (let i = 0; i < count && i < traversalLimit; i++) {
     const href = await anchors.nth(i).getAttribute("href")
     if (!href) continue
 
@@ -303,7 +337,7 @@ async function extractProfileUrls(page: BrokerPage, identity: Identity): Promise
   }
 
   // De-dupe, keep order.
-  return [...new Set(hrefs)]
+  return { urls: [...new Set(hrefs)], truncated: count > traversalLimit }
 }
 
 function pressEnter(loc: import("@/types").BrokerLocator): Promise<void> {

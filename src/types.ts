@@ -50,6 +50,12 @@ export interface Listing {
   firstSeenAt: string
   /** Last time a rescan saw this listing still live. */
   lastSeenAt: string
+  /** Current locally-observed presence. Absence is set only by a conclusive rescan. */
+  presenceStatus?: "seen" | "absent"
+  /** Last conclusive broker check, whether seen or absent. */
+  lastCheckedAt?: string
+  /** When a conclusive rescan most recently found the listing absent. */
+  lastAbsentAt?: string
 }
 
 /** Which step an opt-out is at. */
@@ -82,27 +88,62 @@ export interface Submission {
   attempts: number
 }
 
+export type ScanKind = "scan" | "rescan"
+export type BrokerScanOutcome = "found" | "clear" | "inconclusive"
+export type BrokerScanIssueCode =
+  | "challenge"
+  | "selector_drift"
+  | "navigation"
+  | "partial"
+  | "rate_limited"
+  | "unknown"
+
+export interface BrokerScanObservation {
+  outcome: BrokerScanOutcome
+  listings: Listing[]
+  issueCode?: BrokerScanIssueCode
+  detail?: string
+  /** Search-results page captured before the adapter visits any profile. */
+  searchScreenshot?: Buffer
+}
+
+export type ScanListingEventType =
+  | "new"
+  | "still_listed"
+  | "removed"
+  | "still_removed"
+  | "relisted"
+  | "no_longer_seen"
+
+export interface ScanListingEvent {
+  listingId: string
+  brokerId: string
+  type: ScanListingEventType
+  recordedAt: string
+}
+
+export interface ScanBrokerResult {
+  brokerId: string
+  ok: boolean
+  outcome: BrokerScanOutcome
+  listingsFound: number
+  issueCode?: BrokerScanIssueCode
+  error?: string
+  /** Local evidence folder for this broker attempt, including its result-state screenshot. */
+  evidenceDir?: string
+}
+
 /** One pass over all brokers for an identity. */
 export interface ScanRun {
   id: string
   identityId: string
+  kind: ScanKind
   startedAt: string
   finishedAt?: string
   /** per-broker outcome for the run summary UI */
-  results: Array<{
-    brokerId: string
-    ok: boolean
-    listingsFound: number
-    error?: string
-  }>
-}
-
-/** Re-scan of previously submitted listings, to catch relists. */
-export interface RescanRun extends ScanRun {
-  /** listings that were 'removed' but are live again */
-  relisted: string[]
-  /** listings still gone */
-  stillRemoved: string[]
+  results: ScanBrokerResult[]
+  /** Immutable listing transitions produced by a conclusive rescan. */
+  events: ScanListingEvent[]
 }
 
 /** Everything the engine needs to run one broker's flow. Adapters are pure
@@ -118,7 +159,7 @@ export interface BrokerAdapter {
 
   /** Search the broker for the identity, return candidate listings.
    *  The engine provides the page (stealth session already launched). */
-  scan(page: BrokerPage, identity: Identity): Promise<Listing[]>
+  scan(page: BrokerPage, identity: Identity): Promise<BrokerScanObservation>
 
   /** How likely is it that this listing is the identity (vs a namesake)?
    *  0..1. Engine combines with user confirmation. */

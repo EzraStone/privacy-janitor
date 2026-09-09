@@ -18,7 +18,16 @@ import type {
   PreparedOptOut,
 } from "@/types"
 import { newId } from "../store/index.ts"
-import { firstVisible, tryAllTexts, tryClick, tryInnerText, scoreMatch, isPersonProfileSlug } from "./helpers.ts"
+import {
+  classifyBrokerScan,
+  firstVisible,
+  inspectBrokerSearchPage,
+  tryAllTexts,
+  tryClick,
+  tryInnerText,
+  scoreMatch,
+  isPersonProfileSlug,
+} from "./helpers.ts"
 
 const REMOVAL_URL = "https://www.fastpeoplesearch.com/removal"
 
@@ -34,7 +43,7 @@ export const fastpeoplesearch: BrokerAdapter = {
 
   // ── scan ───────────────────────────────────────────────────────────────────
 
-  async scan(page, identity): Promise<Listing[]> {
+  async scan(page, identity) {
     const listings: Listing[] = []
     const now = new Date().toISOString()
 
@@ -72,7 +81,9 @@ export const fastpeoplesearch: BrokerAdapter = {
     // ROOT-level paths like /john-smith_id_G-8653115056365742102 — never
     // /name/... search pages, /address/... pages, or /page/N pagination.
     const anchors = page.locator("a")
-    const count = Math.min(await anchors.count(), 300)
+    const anchorCount = await anchors.count()
+    const traversalLimit = 400
+    const count = Math.min(anchorCount, traversalLimit)
     const urls: string[] = []
 
     for (let i = 0; i < count; i++) {
@@ -85,7 +96,23 @@ export const fastpeoplesearch: BrokerAdapter = {
       urls.push(url)
     }
 
-    for (const url of [...new Set(urls)].slice(0, 5)) {
+    const profileUrls = [...new Set(urls)]
+    const searchEvidence = await inspectBrokerSearchPage(page, {
+      noResultMarkers: ["no results found", "no records found", "0 results"],
+      noResultSelectors: [
+        "#results [role=\"status\"]",
+        '[class*="search-empty" i]',
+        '[class*="records-not-found" i]',
+      ],
+      nextPageSelectors: [
+        'a[href*="/page/2"]',
+        '.pagination a[aria-label*="next" i]',
+      ],
+    })
+    const candidateLimit = 5
+    let failedProfiles = 0
+
+    for (const url of profileUrls.slice(0, candidateLimit)) {
       try {
         await page.goto(url, { waitUntil: "domcontentloaded" })
 
@@ -137,11 +164,22 @@ export const fastpeoplesearch: BrokerAdapter = {
           lastSeenAt: now,
         })
       } catch {
+        failedProfiles++
         continue
       }
     }
 
-    return listings
+    const observation = classifyBrokerScan({
+      listings,
+      candidateCount: profileUrls.length,
+      failedProfiles,
+      candidateLimit,
+      searchPageText: searchEvidence.pageText,
+      explicitNoResults: searchEvidence.explicitNoResults,
+      hasMoreResults: searchEvidence.hasMoreResults,
+      traversalTruncated: anchorCount > traversalLimit,
+    })
+    return { ...observation, searchScreenshot: searchEvidence.screenshot }
   },
 
   // ── match confidence ─────────────────────────────────────────────────────

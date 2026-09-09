@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
         if (!identity) return fail("identity not found", 404)
         const confirmed = store
           .listListings(body.identityId)
-          .filter((l) => l.confirmedMine === true)
+          .filter((l) => l.confirmedMine === true && l.presenceStatus !== "absent")
         if (confirmed.length === 0) return fail("no confirmed listings to score yet")
         const report = await scoreExposure(identity, confirmed)
         return ok({ report })

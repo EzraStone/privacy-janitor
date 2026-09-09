@@ -4,7 +4,7 @@
  * stealth session and files evidence (screenshots + replay URLs) into the
  * store, so every action is auditable later.
  */
-import type { Identity, Listing, ScanRun } from "../types.ts"
+import type { Identity, Listing, ScanBrokerResult, ScanKind, ScanRun } from "../types.ts"
 import { adapters, getAdapter } from "../adapters/registry.ts"
 import * as store from "../store/index.ts"
 import { createProxySessionId, withBrokerSession, getReplayUrl } from "./solari.ts"
@@ -19,12 +19,18 @@ const orchestratorGlobal = globalThis as OrchestratorGlobal
 const activeScans = orchestratorGlobal.__pjActiveScans ??= new Map()
 
 /** Queue a scan and reuse an unfinished run instead of starting a duplicate. */
-export function startScan(identityId: string): { run: ScanRun; resumed: boolean } {
+export function startScan(
+  identityId: string,
+  kind: ScanKind = "scan",
+): { run: ScanRun; resumed: boolean; conflict: boolean } {
   if (!store.getIdentity(identityId)) throw new Error(`identity ${identityId} not found`)
   const existing = store.listScanRuns(identityId).find((run) => !run.finishedAt)
-  const run = existing ?? store.createScanRun(identityId)
+  const run = existing ?? store.createScanRun(identityId, kind)
+  if (existing && existing.kind !== kind) {
+    return { run, resumed: false, conflict: true }
+  }
   scheduleScan(run)
-  return { run, resumed: Boolean(existing) }
+  return { run, resumed: Boolean(existing), conflict: false }
 }
 
 /** Restart unfinished scans when the local app is opened after an interruption. */
@@ -54,11 +60,15 @@ function scheduleScan(run: ScanRun): void {
   activeScans.set(run.id, task)
 }
 
-export async function runScan(identityId: string, resumeRunId?: string): Promise<ScanRun> {
+export async function runScan(
+  identityId: string,
+  resumeRunId?: string,
+  kind: ScanKind = "scan",
+): Promise<ScanRun> {
   const identity = store.getIdentity(identityId)
   if (!identity) throw new Error(`identity ${identityId} not found`)
 
-  const run = resumeRunId ? store.getScanRun(resumeRunId) : store.createScanRun(identityId)
+  const run = resumeRunId ? store.getScanRun(resumeRunId) : store.createScanRun(identityId, kind)
   if (!run || run.identityId !== identityId) {
     throw new Error(`scan ${resumeRunId ?? "unknown"} not found for identity ${identityId}`)
   }
@@ -70,53 +80,55 @@ export async function runScan(identityId: string, resumeRunId?: string): Promise
     // The user may delete the profile while a remote broker session is running.
     if (!store.getIdentity(identityId) || !store.getScanRun(run.id)) return run
 
+    let checkpointed = false
     try {
-      const { result: listings, evidence } = await withBrokerSession(
+      const { result: observation, evidence } = await withBrokerSession(
         `scan-${adapter.id}`,
-        async (page) => {
-          const found = await adapter.scan(page, identity)
-          // Screenshot the first listing page as evidence.
-          if (found.length > 0) {
-            await page.screenshot({ fullPage: true }).then((png) => {
-              evidence.screenshot("scan-result", png)
-            }).catch(() => {})
-          }
-          return found
+        async (page, runEvidence) => {
+          const result = await adapter.scan(page, identity)
+          // Adapters capture the result page before navigating into profiles.
+          // Keep a last-page fallback only if that evidence capture failed.
+          const screenshot = result.searchScreenshot ??
+            await page.screenshot({ fullPage: true }).catch(() => undefined)
+          if (screenshot) runEvidence.screenshot("scan-result-state", screenshot)
+          return result
         },
       )
 
-      // Save / refresh listings (dedupe by broker + url), and drop stale
-      // rows for THIS broker that the fresh scan no longer sees — otherwise
-      // filter changes and broker drift leave phantom listings forever.
-      const existing = store.listListings(identityId)
-      for (const listing of listings) {
-        const prior = existing.find((e) => e.brokerId === listing.brokerId && e.url === listing.url)
-        if (prior) {
-          store.upsertListing({ ...listing, id: prior.id, confirmedMine: prior.confirmedMine, firstSeenAt: prior.firstSeenAt })
-        } else {
-          listing.screenshotPath = evidence.evidenceDir // folder holding run pngs
-          store.upsertListing(listing)
-        }
+      const brokerResult: ScanBrokerResult = {
+        brokerId: adapter.id,
+        ok: observation.outcome !== "inconclusive",
+        outcome: observation.outcome,
+        listingsFound: observation.listings.length,
+        issueCode: observation.issueCode,
+        error: observation.detail,
+        evidenceDir: evidence.evidenceDir,
       }
-      const freshUrls = new Set(listings.map((l) => l.url))
-      for (const prior of existing) {
-        if (prior.brokerId === adapter.id && !freshUrls.has(prior.url)) {
-          store.deleteListing(prior.id)
-        }
-      }
-
-      run.results.push({ brokerId: adapter.id, ok: true, listingsFound: listings.length })
+      const events = store.recordBrokerScanObservation({
+        identityId,
+        brokerId: adapter.id,
+        runKind: run.kind,
+        observation,
+        evidenceDir: evidence.evidenceDir,
+        runId: run.id,
+        result: brokerResult,
+      })
+      run.events.push(...events)
+      run.results.push(brokerResult)
+      checkpointed = true
     } catch (err) {
       run.results.push({
         brokerId: adapter.id,
         ok: false,
+        outcome: "inconclusive",
         listingsFound: 0,
+        issueCode: "unknown",
         error: err instanceof Error ? err.message : String(err),
       })
     }
 
     // A crash after this point resumes at the next broker, not from scratch.
-    if (!store.saveScanRunProgress(run)) return run
+    if (!checkpointed && !store.saveScanRunProgress(run)) return run
   }
 
   if (store.getScanRun(run.id)) store.finishScanRun(run)
@@ -132,6 +144,7 @@ export async function prepareListingOptOut(
 ): Promise<{ previewPath: string; summary: string }> {
   const listing = store.getListing(listingId)
   if (!listing) throw new Error(`listing ${listingId} not found`)
+  assertListingPresent(listing)
   const identity = store.getIdentity(listing.identityId)
   if (!identity) throw new Error(`identity ${listing.identityId} not found`)
   const adapter = getAdapter(listing.brokerId)
@@ -175,6 +188,7 @@ export async function submitApprovedOptOut(listingId: string): Promise<void> {
   if (!prepared) throw new Error("nothing prepared for this listing — prepare first")
   const listing = store.getListing(listingId)
   if (!listing) throw new Error(`listing ${listingId} not found`)
+  assertListingPresent(listing)
   const identity = store.getIdentity(listing.identityId)
   if (!identity) throw new Error(`identity ${listing.identityId} not found`)
   const adapter = getAdapter(listing.brokerId)
@@ -221,6 +235,7 @@ export async function submitApprovedOptOut(listingId: string): Promise<void> {
 export async function confirmOptOutEmail(listingId: string, confirmationUrl: string): Promise<void> {
   const listing = store.getListing(listingId)
   if (!listing) throw new Error(`listing ${listingId} not found`)
+  assertListingPresent(listing)
   const adapter = getAdapter(listing.brokerId)
   if (!adapter.confirmByEmail) throw new Error(`${adapter.name} flow has no email confirmation step`)
 
@@ -253,53 +268,15 @@ export async function confirmOptOutEmail(listingId: string, confirmationUrl: str
 
 // ── rescan + diff ───────────────────────────────────────────────────────────
 
-export interface RescanDiff {
-  removed: Array<{ listingId: string; brokerId: string }>
-  stillListed: Array<{ listingId: string; brokerId: string }>
-  relisted: Array<{ listingId: string; brokerId: string }>
-  newFindings: Array<{ listingId: string; brokerId: string }>
+/** Run a synchronous rescan for CLI/tests; the UI uses startScan(..., "rescan"). */
+export function runRescan(identityId: string): Promise<ScanRun> {
+  return runScan(identityId, undefined, "rescan")
 }
 
-/** Re-run scans and diff against stored listings. */
-export async function runRescan(identityId: string): Promise<RescanDiff> {
-  const identity = store.getIdentity(identityId)
-  if (!identity) throw new Error(`identity ${identityId} not found`)
-
-  const before = store.listListings(identityId)
-  const confirmed = before.filter((l) => l.confirmedMine === true)
-  const beforeUrls = new Set(confirmed.map((l) => `${l.brokerId}::${l.url}`))
-
-  await runScan(identityId)
-
-  const after = store.listListings(identityId)
-  const afterUrls = new Set(after.map((l) => `${l.brokerId}::${l.url}`))
-
-  const diff: RescanDiff = { removed: [], stillListed: [], relisted: [], newFindings: [] }
-
-  for (const l of confirmed) {
-    const key = `${l.brokerId}::${l.url}`
-    const entry = { listingId: l.id, brokerId: l.brokerId }
-    const subs = store.listSubmissions(l.id)
-    const sub = subs[0]
-    if (afterUrls.has(key)) {
-      if (sub?.status === "confirmed" || sub?.status === "removed") {
-        diff.relisted.push(entry)
-        if (sub) store.updateSubmission(sub.id, { status: "submitted" })
-      } else {
-        diff.stillListed.push(entry)
-      }
-    } else {
-      diff.removed.push(entry)
-      if (sub) store.updateSubmission(sub.id, { status: "removed", removedVerifiedAt: new Date().toISOString() })
-    }
+function assertListingPresent(listing: Listing): void {
+  if (listing.presenceStatus === "absent") {
+    throw new Error("this listing is no longer visible; rescan before taking another broker action")
   }
-
-  for (const l of after) {
-    const key = `${l.brokerId}::${l.url}`
-    if (!beforeUrls.has(key)) diff.newFindings.push({ listingId: l.id, brokerId: l.brokerId })
-  }
-
-  return diff
 }
 
 export type { Identity, Listing }
