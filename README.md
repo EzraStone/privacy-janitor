@@ -10,7 +10,7 @@ cloud stealth browsers, with screenshot and session-replay evidence for every si
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg?style=flat-square&logo=typescript&logoColor=white)
-![Next.js 15](https://img.shields.io/badge/Next.js-15-000000.svg?style=flat-square&logo=nextdotjs)
+![Next.js 16](https://img.shields.io/badge/Next.js-16-000000.svg?style=flat-square&logo=nextdotjs)
 ![Data: 100% local](https://img.shields.io/badge/data-100%25%20local-8b5cf6.svg?style=flat-square)
 ![PRs welcome](https://img.shields.io/badge/PRs-welcome-f59e0b.svg?style=flat-square)
 
@@ -86,6 +86,8 @@ opt-out flow keeps the same residential IP while Solari's 30-minute pin remains 
   telemetry, no server holding your address.
 
 ## Quickstart
+
+Requires Node.js 24 or newer; Node 24 is used in CI.
 
 ```bash
 git clone https://github.com/EzraStone/privacy-janitor.git

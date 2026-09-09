@@ -28,3 +28,6 @@ jobs:
 
       - name: Verify application
         run: npm run check
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
