@@ -9,6 +9,7 @@ import { DatabaseSync } from "node:sqlite"
 import { mkdirSync } from "node:fs"
 import { dirname } from "node:path"
 import { getDatabasePath } from "../config/paths.ts"
+import { activeSubmissionStatuses, canTransition } from "../engine/submission-state.ts"
 import type {
   BrokerScanObservation,
   Identity,
@@ -20,6 +21,7 @@ import type {
   ScanListingEvent,
   ScanRun,
   Submission,
+  SubmissionOperation,
   SubmissionStatus,
 } from "@/types"
 
@@ -81,6 +83,7 @@ function migrate(db: DatabaseSync): void {
       confirm_evidence_dir TEXT,
       removed_verified_at TEXT,
       last_error TEXT,
+      attention_operation TEXT,
       attempts INTEGER NOT NULL DEFAULT 0
     );
 
@@ -96,6 +99,7 @@ function migrate(db: DatabaseSync): void {
 
     CREATE TABLE IF NOT EXISTS prepared_optouts (
       listing_id TEXT PRIMARY KEY,
+      submission_id TEXT NOT NULL,
       broker_id TEXT NOT NULL,
       state TEXT NOT NULL,
       created_at TEXT NOT NULL
@@ -107,7 +111,11 @@ function migrate(db: DatabaseSync): void {
   // migration failure aborts startup with its original SQLite error.
   db.exec("BEGIN")
   try {
+    const legacySubmissionModel = !(db.prepare("PRAGMA table_info(submissions)").all() as Array<{ name: string }> )
+      .some((column) => column.name === "attention_operation")
     ensureColumn(db, "submissions", "confirm_evidence_dir", "TEXT")
+    ensureColumn(db, "submissions", "attention_operation", "TEXT")
+    ensureColumn(db, "prepared_optouts", "submission_id", "TEXT")
     ensureColumn(db, "listings", "presence_status", "TEXT NOT NULL DEFAULT 'seen'")
     ensureColumn(db, "listings", "last_checked_at", "TEXT")
     ensureColumn(db, "listings", "last_absent_at", "TEXT")
@@ -123,6 +131,11 @@ function migrate(db: DatabaseSync): void {
       .all() as Array<{ id: string; identity_id: string }>
     const newestByIdentity = new Set<string>()
     const migratedAt = new Date().toISOString()
+    if (legacySubmissionModel) {
+      db.prepare(`UPDATE submissions SET status = 'attention_required', attention_operation = 'submit',
+        last_error = 'The previous app version may already have sent this request.', updated_at = ?
+        WHERE status = 'approved'`).run(migratedAt)
+    }
     for (const run of unfinished) {
       if (newestByIdentity.has(run.identity_id)) {
         db.prepare("UPDATE scan_runs SET finished_at = ? WHERE id = ?").run(migratedAt, run.id)
@@ -131,6 +144,116 @@ function migrate(db: DatabaseSync): void {
       }
     }
 
+    // A process restart makes an in-flight remote click ambiguous. Never
+    // retry it automatically: require the user to acknowledge that the
+    // broker may already have received the action.
+    db.prepare(
+      `UPDATE submissions
+       SET status = 'attention_required', attention_operation = 'submit',
+           last_error = COALESCE(last_error, ?), updated_at = ?
+       WHERE status = 'submitting'`,
+    ).run("The app stopped while submission may have been in flight.", migratedAt)
+    db.prepare(
+      `UPDATE submissions
+       SET status = 'attention_required', attention_operation = 'confirm',
+           last_error = COALESCE(last_error, ?), updated_at = ?
+       WHERE status = 'confirming'`,
+    ).run("The app stopped while confirmation may have been in flight.", migratedAt)
+
+    // Link legacy prepared browser state to its most relevant submission.
+    db.exec(`
+      UPDATE prepared_optouts
+      SET submission_id = (
+        SELECT id FROM submissions
+        WHERE submissions.listing_id = prepared_optouts.listing_id
+        ORDER BY
+          CASE status
+            WHEN 'confirmed' THEN 90
+            WHEN 'awaiting_email' THEN 80
+            WHEN 'submitted' THEN 80
+            WHEN 'attention_required' THEN 70
+            WHEN 'approved' THEN 60
+            WHEN 'prepared' THEN 50
+            WHEN 'failed' THEN 40
+            ELSE 0
+          END DESC,
+          created_at DESC
+        LIMIT 1
+      )
+      WHERE submission_id IS NULL OR submission_id = '';
+
+      UPDATE submissions
+      SET status = 'attention_required', attention_operation = 'submit',
+          last_error = COALESCE(last_error,
+            'A legacy submission failure may have happened after the broker received it.'),
+          updated_at = '${migratedAt}'
+      WHERE status = 'failed' AND ${legacySubmissionModel ? "1" : "0"}
+        AND id IN (SELECT submission_id FROM prepared_optouts);
+
+      UPDATE submissions
+      SET status = 'cancelled',
+          last_error = COALESCE(last_error, 'Prepared browser state was not recoverable.'),
+          updated_at = '${migratedAt}'
+      WHERE status = 'prepared'
+        AND NOT EXISTS (
+          SELECT 1 FROM prepared_optouts
+          WHERE prepared_optouts.submission_id = submissions.id
+        );
+    `)
+
+    // Older endpoints could create multiple live attempts. Keep the most
+    // advanced attempt and make the rest terminal before adding uniqueness.
+    const activeSubmissions = db
+      .prepare(
+        `SELECT id, listing_id FROM submissions
+         WHERE status IN (
+           'prepared', 'approved', 'submitting', 'submitted', 'awaiting_email',
+           'confirming', 'confirmed', 'attention_required'
+         )
+         ORDER BY
+           CASE status
+             WHEN 'confirmed' THEN 90
+             WHEN 'awaiting_email' THEN 80
+             WHEN 'submitted' THEN 80
+             WHEN 'attention_required' THEN 70
+             WHEN 'approved' THEN 60
+             WHEN 'prepared' THEN 50
+             ELSE 40
+           END DESC,
+           created_at DESC`,
+      )
+      .all() as Array<{ id: string; listing_id: string }>
+    const keptListings = new Set<string>()
+    for (const submission of activeSubmissions) {
+      if (keptListings.has(submission.listing_id)) {
+        db.prepare(
+          `UPDATE submissions
+           SET status = 'cancelled', attention_operation = NULL,
+               last_error = COALESCE(last_error, 'Superseded by another active attempt.'),
+               updated_at = ?
+           WHERE id = ?`,
+        ).run(migratedAt, submission.id)
+      } else {
+        keptListings.add(submission.listing_id)
+      }
+    }
+
+    db.exec(`
+      DELETE FROM prepared_optouts
+      WHERE NOT EXISTS (
+        SELECT 1 FROM submissions
+        WHERE submissions.id = prepared_optouts.submission_id
+          AND submissions.listing_id = prepared_optouts.listing_id
+          AND (
+            submissions.status IN ('prepared', 'approved')
+            OR (
+              submissions.status = 'attention_required'
+              AND submissions.attention_operation = 'submit'
+            )
+          )
+      );
+    `)
+
     db.exec(`
       CREATE INDEX IF NOT EXISTS idx_listings_identity_broker
         ON listings(identity_id, broker_id);
@@ -138,6 +261,14 @@ function migrate(db: DatabaseSync): void {
         ON submissions(listing_id, created_at DESC);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_scan_runs_one_unfinished_identity
         ON scan_runs(identity_id) WHERE finished_at IS NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_submissions_one_active_listing
+        ON submissions(listing_id)
+        WHERE status IN (
+          'prepared', 'approved', 'submitting', 'submitted', 'awaiting_email',
+          'confirming', 'confirmed', 'attention_required'
+        );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_prepared_optouts_submission
+        ON prepared_optouts(submission_id) WHERE submission_id IS NOT NULL;
     `)
     db.exec("COMMIT")
   } catch (err) {
@@ -239,12 +370,12 @@ export function deleteIdentity(identityId: string): string[] {
 
     for (const { id } of listings) {
       // collect evidence paths + prepared state before deleting rows
-      const sub = db
+      const submissions = db
         .prepare(
           "SELECT preview_screenshot_path, result_screenshot_path, confirm_evidence_dir FROM submissions WHERE listing_id = ?",
         )
-        .get(id) as Record<string, unknown> | undefined
-      if (sub) {
+        .all(id) as Array<Record<string, unknown>>
+      for (const sub of submissions) {
         for (const k of ["preview_screenshot_path", "result_screenshot_path", "confirm_evidence_dir"]) {
           const p = sub[k] as string | null
           if (p) evidenceDirs.push(p)
@@ -310,12 +441,12 @@ export function resetAll(): { evidenceDirs: string[] } {
     }>
     for (const l of listings) {
       if (l.screenshot_path) evidenceDirs.push(l.screenshot_path)
-      const sub = db
+      const submissions = db
         .prepare(
           "SELECT preview_screenshot_path, result_screenshot_path, confirm_evidence_dir FROM submissions WHERE listing_id = ?",
         )
-        .get(l.id) as Record<string, unknown> | undefined
-      if (sub) {
+        .all(l.id) as Array<Record<string, unknown>>
+      for (const sub of submissions) {
         for (const k of ["preview_screenshot_path", "result_screenshot_path", "confirm_evidence_dir"]) {
           const p = sub[k] as string | null
           if (p) evidenceDirs.push(p)
@@ -663,7 +794,8 @@ export function updateSubmission(
     previewScreenshotPath?: string
     resultScreenshotPath?: string
     removedVerifiedAt?: string
-    lastError?: string
+    lastError?: string | null
+    attentionOperation?: SubmissionOperation | null
     incrementAttempts?: boolean
   },
 ): void {
@@ -684,6 +816,7 @@ export function updateSubmission(
          result_screenshot_path = ?,
          removed_verified_at = ?,
          last_error = ?,
+         attention_operation = ?,
          attempts = attempts + ?
        WHERE id = ?`,
     )
@@ -696,7 +829,9 @@ export function updateSubmission(
       patch.previewScreenshotPath ?? (cur.preview_screenshot_path as string | null) ?? null,
       patch.resultScreenshotPath ?? (cur.result_screenshot_path as string | null) ?? null,
       patch.removedVerifiedAt ?? (cur.removed_verified_at as string | null) ?? null,
-      patch.lastError ?? (cur.last_error as string | null) ?? null,
+      patch.lastError === undefined ? (cur.last_error as string | null) ?? null : patch.lastError,
+      patch.attentionOperation === undefined
+        ? (cur.attention_operation as string | null) ?? null : patch.attentionOperation,
       patch.incrementAttempts ? 1 : 0,
       id,
     )
@@ -706,8 +841,8 @@ export function listSubmissions(listingId?: string): Submission[] {
   const db = open()
   const rows = (
     listingId
-      ? db.prepare("SELECT * FROM submissions WHERE listing_id = ? ORDER BY created_at DESC").all(listingId)
-      : db.prepare("SELECT * FROM submissions ORDER BY created_at DESC").all()
+      ? db.prepare("SELECT * FROM submissions WHERE listing_id = ? ORDER BY created_at DESC, rowid DESC").all(listingId)
+      : db.prepare("SELECT * FROM submissions ORDER BY created_at DESC, rowid DESC").all()
   ) as Array<Record<string, unknown>>
   return rows.map((r) => ({
     id: r.id as string,
@@ -717,10 +852,12 @@ export function listSubmissions(listingId?: string): Submission[] {
     updatedAt: r.updated_at as string,
     submitSessionId: (r.submit_session_id as string) ?? undefined,
     confirmSessionId: (r.confirm_session_id as string) ?? undefined,
+    confirmEvidenceDir: (r.confirm_evidence_dir as string) ?? undefined,
     previewScreenshotPath: (r.preview_screenshot_path as string) ?? undefined,
     resultScreenshotPath: (r.result_screenshot_path as string) ?? undefined,
     removedVerifiedAt: (r.removed_verified_at as string) ?? undefined,
     lastError: (r.last_error as string) ?? undefined,
+    attentionOperation: (r.attention_operation as SubmissionOperation) ?? undefined,
     attempts: r.attempts as number,
   }))
 }
@@ -806,12 +943,12 @@ function rowToScanRun(r: Record<string, unknown>): ScanRun {
 export function savePreparedOptOut(prepared: PreparedOptOut): void {
   open()
     .prepare(
-      `INSERT INTO prepared_optouts (listing_id, broker_id, state, created_at)
-       VALUES (?, ?, ?, ?)
+      `INSERT INTO prepared_optouts (listing_id, submission_id, broker_id, state, created_at)
+       VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(listing_id) DO UPDATE SET
-         state=excluded.state, created_at=excluded.created_at`,
+         submission_id=excluded.submission_id, state=excluded.state, created_at=excluded.created_at`,
     )
-    .run(prepared.listingId, prepared.brokerId, JSON.stringify(prepared.state), prepared.createdAt)
+    .run(prepared.listingId, prepared.submissionId, prepared.brokerId, JSON.stringify(prepared.state), prepared.createdAt)
 }
 
 export function getPreparedOptOut(listingId: string): PreparedOptOut | undefined {
@@ -820,6 +957,7 @@ export function getPreparedOptOut(listingId: string): PreparedOptOut | undefined
     .get(listingId) as Record<string, unknown> | undefined
   if (!row) return undefined
   return {
+    submissionId: row.submission_id as string,
     listingId: row.listing_id as string,
     brokerId: row.broker_id as string,
     state: JSON.parse(row.state as string),
@@ -827,8 +965,98 @@ export function getPreparedOptOut(listingId: string): PreparedOptOut | undefined
   }
 }
 
-export function deletePreparedOptOut(listingId: string): void {
-  open().prepare("DELETE FROM prepared_optouts WHERE listing_id = ?").run(listingId)
+export function deletePreparedOptOut(listingId: string, submissionId: string): void {
+  open().prepare("DELETE FROM prepared_optouts WHERE listing_id = ? AND submission_id = ?")
+    .run(listingId, submissionId)
+}
+
+export function getSubmission(id: string): Submission | undefined {
+  const row = open().prepare("SELECT listing_id FROM submissions WHERE id = ?").get(id) as
+    { listing_id: string } | undefined
+  return row ? listSubmissions(row.listing_id).find((sub) => sub.id === id) : undefined
+}
+
+export function activeSubmission(listingId: string): Submission | undefined {
+  return listSubmissions(listingId).find((sub) => activeSubmissionStatuses.includes(sub.status))
+}
+
+export function requireActionableListing(listingId: string): Listing {
+  const listing = getListing(listingId)
+  if (!listing) throw new Error("listing not found")
+  if (listing.confirmedMine !== true) throw new Error("confirm that this listing is yours first")
+  if (listing.presenceStatus === "absent") throw new Error("this listing is currently absent; rescan before another broker action")
+  if (!getIdentity(listing.identityId)) throw new Error("profile not found")
+  return listing
+}
+
+/** One transaction binds the preview and exact attempt; no half-prepared row. */
+export function commitPreparedOptOut(input: Omit<PreparedOptOut, "submissionId">): Submission {
+  const db = open()
+  db.exec("BEGIN IMMEDIATE")
+  try {
+    requireActionableListing(input.listingId)
+    const existing = activeSubmission(input.listingId)
+    if (existing) {
+      db.exec("COMMIT")
+      return existing
+    }
+    const submission = createSubmission(input.listingId)
+    savePreparedOptOut({ ...input, submissionId: submission.id })
+    updateSubmission(submission.id, { previewScreenshotPath: input.state.previewPath })
+    db.exec("COMMIT")
+    return getSubmission(submission.id)!
+  } catch (error) {
+    db.exec("ROLLBACK")
+    throw error
+  }
+}
+
+/** Atomic compare-and-set: only the worker that claims the expected state acts. */
+export function transitionSubmission(
+  id: string,
+  expected: SubmissionStatus,
+  next: SubmissionStatus,
+  patch: Omit<Parameters<typeof updateSubmission>[1], "status"> = {},
+  deletePrepared = false,
+): boolean {
+  if (!canTransition(expected, next)) throw new Error(`invalid submission transition ${expected} -> ${next}`)
+  const db = open()
+  db.exec("BEGIN IMMEDIATE")
+  try {
+    const current = getSubmission(id)
+    if (!current || current.status !== expected) {
+      db.exec("COMMIT")
+      return false
+    }
+    if (["approved", "submitting", "confirming"].includes(next)) {
+      requireActionableListing(current.listingId)
+    }
+    updateSubmission(id, { ...patch, status: next })
+    if (deletePrepared) deletePreparedOptOut(current.listingId, id)
+    db.exec("COMMIT")
+    return true
+  } catch (error) {
+    db.exec("ROLLBACK")
+    throw error
+  }
+}
+
+export function requireCurrentSubmission(listingId: string, submissionId: string): Submission {
+  const sub = getSubmission(submissionId)
+  if (!sub || sub.listingId !== listingId) throw new Error("submission does not belong to this listing")
+  const current = activeSubmission(listingId) ?? listSubmissions(listingId)[0]
+  if (current?.id !== sub.id) throw new Error("this attempt was superseded; refresh the queue")
+  return sub
+}
+
+export function cancelSubmission(listingId: string, submissionId: string): Submission {
+  const sub = requireCurrentSubmission(listingId, submissionId)
+  if (sub.status === "cancelled") return sub
+  if (!["prepared", "approved", "attention_required"].includes(sub.status)) {
+    throw new Error("this attempt cannot be cancelled while a broker action is in flight or completed")
+  }
+  transitionSubmission(sub.id, sub.status, "cancelled", {}, true)
+  return getSubmission(sub.id)!
 }
 
 /** Receipts are derived data; kept in submissions only. This type re-export

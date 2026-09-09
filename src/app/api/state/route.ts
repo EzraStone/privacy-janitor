@@ -2,6 +2,7 @@ import { NextRequest } from "next/server"
 import { ok, fail, failFromError, readJson } from "../_lib"
 import * as store from "@/store"
 import { resumeIncompleteScans, startScan } from "@/engine/orchestrator"
+import { optOuts } from "@/engine/optouts"
 import { removeEvidencePaths } from "@/engine/cleanup"
 import type { Identity } from "@/types"
 import { assertTrustedLocalRequest } from "@/security/requests"
@@ -12,6 +13,7 @@ export async function GET(req: NextRequest) {
   try {
     assertTrustedLocalRequest(req)
     resumeIncompleteScans()
+    optOuts.resume()
     return ok({
       identities: store.listIdentities(),
       listings: store.listListings(),
@@ -87,8 +89,8 @@ export async function POST(req: NextRequest) {
 
       case "delete-identity": {
         if (!body.identityId) return fail("identityId required")
-        if (store.listScanRuns(body.identityId).some((run) => !run.finishedAt)) {
-          return fail("wait for the active scan to finish before deleting this profile", 409)
+        if (store.listScanRuns(body.identityId).some((run) => !run.finishedAt) || optOuts.isBusy(body.identityId)) {
+          return fail("wait for active scans and broker actions to finish before deleting this profile", 409)
         }
         // DB rows go in one transaction; evidence files after commit.
         const evidenceDirs = store.deleteIdentity(body.identityId)
@@ -97,8 +99,8 @@ export async function POST(req: NextRequest) {
       }
 
       case "reset-all": {
-        if (store.listScanRuns().some((run) => !run.finishedAt)) {
-          return fail("wait for active scans to finish before resetting local data", 409)
+        if (store.listScanRuns().some((run) => !run.finishedAt) || optOuts.isBusy()) {
+          return fail("wait for active scans and broker actions to finish before resetting local data", 409)
         }
         const { evidenceDirs } = store.resetAll()
         const filesRemoved = removeEvidencePaths(evidenceDirs)

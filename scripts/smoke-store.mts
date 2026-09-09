@@ -116,6 +116,7 @@ check("submissions saved", store.listSubmissions("lst_s1").length === 1)
 
 const preparedProxySessionId = "optout-whitepages-test"
 store.savePreparedOptOut({
+  submissionId: sub.id,
   listingId: "lst_s1",
   brokerId: "whitepages",
   state: { contactEmail: "test@example.com", proxySessionId: preparedProxySessionId },

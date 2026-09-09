@@ -7,7 +7,7 @@
 import type { Identity, Listing, ScanBrokerResult, ScanKind, ScanRun } from "../types.ts"
 import { adapters, getAdapter } from "../adapters/registry.ts"
 import * as store from "../store/index.ts"
-import { createProxySessionId, withBrokerSession, getReplayUrl } from "./solari.ts"
+import { withBrokerSession } from "./solari.ts"
 
 // ── scan ────────────────────────────────────────────────────────────────────
 
@@ -135,148 +135,13 @@ export async function runScan(
   return run
 }
 
-// ── opt-out: prepare -> approve -> submit ───────────────────────────────────
-
-/** Contact email is whatever the user wants brokers to see; collected in UI. */
-export async function prepareListingOptOut(
-  listingId: string,
-  contactEmail: string,
-): Promise<{ previewPath: string; summary: string }> {
-  const listing = store.getListing(listingId)
-  if (!listing) throw new Error(`listing ${listingId} not found`)
-  assertListingPresent(listing)
-  const identity = store.getIdentity(listing.identityId)
-  if (!identity) throw new Error(`identity ${listing.identityId} not found`)
-  const adapter = getAdapter(listing.brokerId)
-  const stickySessionId = createProxySessionId(`optout-${adapter.id}`)
-
-  const { result, evidence } = await withBrokerSession(
-    `optout-${adapter.id}`,
-    async (page) => adapter.prepareOptOut(page, listing, identity, contactEmail),
-    { proxySessionId: stickySessionId },
-  )
-
-  const previewPath = evidence.screenshot("optout-preview", result.screenshot)
-  const replay = evidence.sessionId ? await getReplayUrl(evidence.sessionId).catch(() => undefined) : undefined
-
-  // Persist the prepared state so submit can resume in a fresh session.
-  store.savePreparedOptOut({
-    listingId,
-    brokerId: adapter.id,
-    state: {
-      contactEmail,
-      previewPath,
-      replayUrl: replay ?? "",
-      sessionEvidenceDir: evidence.evidenceDir,
-      proxySessionId: evidence.proxySessionId,
-    },
-    createdAt: new Date().toISOString(),
-  })
-
-  const sub = store.createSubmission(listingId)
-  store.updateSubmission(sub.id, {
-    status: "prepared",
-    previewScreenshotPath: previewPath,
-  })
-
-  return { previewPath, summary: result.summary }
-}
-
-/** Submit only after user approval. Re-drives the form, then clicks submit. */
-export async function submitApprovedOptOut(listingId: string): Promise<void> {
-  const prepared = store.getPreparedOptOut(listingId)
-  if (!prepared) throw new Error("nothing prepared for this listing — prepare first")
-  const listing = store.getListing(listingId)
-  if (!listing) throw new Error(`listing ${listingId} not found`)
-  assertListingPresent(listing)
-  const identity = store.getIdentity(listing.identityId)
-  if (!identity) throw new Error(`identity ${listing.identityId} not found`)
-  const adapter = getAdapter(listing.brokerId)
-
-  const subs = store.listSubmissions(listingId)
-  const sub = subs[0]
-  if (!sub) throw new Error("no submission record — prepare first")
-
-  store.updateSubmission(sub.id, { status: "approved", incrementAttempts: true })
-
-  try {
-    const { result, evidence } = await withBrokerSession(
-      `submit-${adapter.id}`,
-      async (page) => {
-        // Re-drive the form to the filled state (fresh session), then submit.
-        await adapter.prepareOptOut(page, listing, identity, prepared.state.contactEmail)
-        return adapter.submitOptOut(page, prepared)
-      },
-      { proxySessionId: prepared.state.proxySessionId },
-    )
-
-    const resultPath = result.screenshot
-      ? evidence.screenshot("optout-result", result.screenshot)
-      : undefined
-
-    store.updateSubmission(sub.id, {
-      status: result.needsEmailConfirmation && adapter.expectsEmailConfirmation
-        ? "awaiting_email"
-        : "submitted",
-      resultScreenshotPath: resultPath,
-      submitSessionId: evidence.sessionId,
-    })
-    store.deletePreparedOptOut(listingId)
-  } catch (err) {
-    store.updateSubmission(sub.id, {
-      status: "failed",
-      lastError: err instanceof Error ? err.message : String(err),
-    })
-    throw err
-  }
-}
-
-/** User pasted the confirmation link from their email; click it recorded. */
-export async function confirmOptOutEmail(listingId: string, confirmationUrl: string): Promise<void> {
-  const listing = store.getListing(listingId)
-  if (!listing) throw new Error(`listing ${listingId} not found`)
-  assertListingPresent(listing)
-  const adapter = getAdapter(listing.brokerId)
-  if (!adapter.confirmByEmail) throw new Error(`${adapter.name} flow has no email confirmation step`)
-
-  const subs = store.listSubmissions(listingId)
-  const sub = subs[0]
-  if (!sub) throw new Error("no submission record")
-
-  try {
-    const { evidence } = await withBrokerSession(`confirm-${adapter.id}`, async (page) => {
-      const confirm = adapter.confirmByEmail!
-      await confirm(page, confirmationUrl)
-      await page.screenshot({ fullPage: true }).then((png) => {
-        evidence.screenshot("email-confirm-result", png)
-      }).catch(() => {})
-    })
-
-    store.updateSubmission(sub.id, {
-      status: "confirmed",
-      confirmSessionId: evidence.sessionId,
-      confirmEvidenceDir: evidence.evidenceDir,
-    })
-  } catch (err) {
-    store.updateSubmission(sub.id, {
-      status: "failed",
-      lastError: err instanceof Error ? err.message : String(err),
-    })
-    throw err
-  }
-}
+// Opt-out workers live in optouts.ts; scans share the same local store.
 
 // ── rescan + diff ───────────────────────────────────────────────────────────
 
 /** Run a synchronous rescan for CLI/tests; the UI uses startScan(..., "rescan"). */
 export function runRescan(identityId: string): Promise<ScanRun> {
   return runScan(identityId, undefined, "rescan")
-}
-
-function assertListingPresent(listing: Listing): void {
-  if (listing.presenceStatus === "absent") {
-    throw new Error("this listing is no longer visible; rescan before taking another broker action")
-  }
 }
 
 export type { Identity, Listing }

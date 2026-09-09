@@ -61,13 +61,18 @@ export interface Listing {
 /** Which step an opt-out is at. */
 export type SubmissionStatus =
   | "prepared" // form filled, awaiting user approval of preview
-  | "approved" // user approved; submit is queued/running
+  | "approved" // user approved; safe to resume before broker submission starts
+  | "submitting" // broker action may be in flight; never auto-retry after interruption
   | "submitted" // opt-out request sent to broker
   | "awaiting_email" // broker sent confirmation email; waiting on user to paste link
+  | "confirming" // confirmation click may be in flight
   | "confirmed" // confirmation link clicked; removal in progress at broker
   | "removed" // rescan verified listing is gone
+  | "attention_required" // interrupted remote action; explicit retry acknowledgement required
   | "failed" // something broke — see lastError
   | "cancelled" // user changed their mind
+
+export type SubmissionOperation = "submit" | "confirm"
 
 export interface Submission {
   id: string
@@ -79,12 +84,16 @@ export interface Submission {
   submitSessionId?: string
   /** Solari session id of the confirmation-click run. */
   confirmSessionId?: string
+  /** Local evidence folder for the confirmation-click run. */
+  confirmEvidenceDir?: string
   /** Screenshots: preview (filled form pre-approval), submit result page. */
   previewScreenshotPath?: string
   resultScreenshotPath?: string
   /** If a rescan proved removal, when. */
   removedVerifiedAt?: string
   lastError?: string
+  /** Which remote step may have completed when status is attention_required. */
+  attentionOperation?: SubmissionOperation
   attempts: number
 }
 
@@ -220,6 +229,8 @@ export interface FilledOptOutForm {
 
 /** What the engine keeps between prepare and submit. */
 export interface PreparedOptOut {
+  /** Exact submission attempt this browser state belongs to. */
+  submissionId: string
   listingId: string
   brokerId: string
   /** Serialized state the adapter needs to finish (e.g. form URL, token). */

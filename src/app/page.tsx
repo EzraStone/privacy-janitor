@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { Identity, Listing, ScanRun, Submission, SubmissionStatus } from "@/types"
 import type { ExposureReport } from "@/scoring"
+import { activeSubmissionStatuses } from "@/engine/submission-state"
 
 interface StateResponse {
   identities: Identity[]
@@ -13,10 +14,13 @@ interface StateResponse {
 
 const statusLabel: Record<SubmissionStatus, string> = {
   prepared: "Awaiting your approval",
-  approved: "Submitting…",
+  approved: "Approved — queued",
+  submitting: "Submitting…",
   submitted: "Submitted to broker",
   awaiting_email: "Waiting on email confirmation",
   confirmed: "Confirmed — removal in progress",
+  confirming: "Confirming…",
+  attention_required: "Review needed — outcome uncertain",
   removed: "Removed ✓ (verified by re-scan)",
   failed: "Failed — see error",
   cancelled: "Cancelled",
@@ -52,7 +56,8 @@ export default function Home() {
 
   // Poll while a scan is running so results stream in.
   useEffect(() => {
-    const scanActive = state?.scans.some((s) => !s.finishedAt)
+    const scanActive = state?.scans.some((s) => !s.finishedAt) ||
+      state?.submissions.some((s) => ["approved", "submitting", "confirming"].includes(s.status))
     if (scanActive && !pollRef.current) {
       pollRef.current = setInterval(() => void refresh(), 4000)
     } else if (!scanActive && pollRef.current) {
@@ -397,7 +402,8 @@ export default function Home() {
           </div>
           <div className="space-y-3">
             {confirmedListings.map((l) => {
-              const sub = scopedSubmissions.find((s) => s.listingId === l.id)
+              const sub = scopedSubmissions.find((s) => s.listingId === l.id && activeSubmissionStatuses.includes(s.status)) ??
+                scopedSubmissions.find((s) => s.listingId === l.id)
               return (
                 <OptOutRow
                   key={l.id}
@@ -408,9 +414,9 @@ export default function Home() {
                   confirmUrl={confirmUrl[l.id] ?? ""}
                   onConfirmUrlChange={(v) => setConfirmUrl((m) => ({ ...m, [l.id]: v }))}
                   onPrepare={() => void action({ action: "prepare-optout", listingId: l.id, contactEmail }, `p-${l.id}`)}
-                  onApprove={() => void action({ action: "approve-optout", listingId: l.id }, `a-${l.id}`)}
-                  onCancel={() => void action({ action: "cancel-optout", listingId: l.id }, `x-${l.id}`)}
-                  onConfirmEmail={() => void action({ action: "confirm-email", listingId: l.id, confirmationUrl: confirmUrl[l.id] }, `e-${l.id}`)}
+                  onApprove={(retryAcknowledged = false) => void action({ action: "approve-optout", listingId: l.id, submissionId: sub?.id, retryAcknowledged }, `a-${l.id}`)}
+                  onCancel={() => void action({ action: "cancel-optout", listingId: l.id, submissionId: sub?.id }, `x-${l.id}`)}
+                  onConfirmEmail={(retryAcknowledged = false) => void action({ action: "confirm-email", listingId: l.id, submissionId: sub?.id, confirmationUrl: confirmUrl[l.id], retryAcknowledged }, `e-${l.id}`)}
                 />
               )
             })}
@@ -621,10 +627,12 @@ function OptOutRow({
   confirmUrl: string
   onConfirmUrlChange: (v: string) => void
   onPrepare: () => void
-  onApprove: () => void
+  onApprove: (retryAcknowledged?: boolean) => void
   onCancel: () => void
-  onConfirmEmail: () => void
+  onConfirmEmail: (retryAcknowledged?: boolean) => void
 }) {
+  const [retryAcknowledged, setRetryAcknowledged] = useState(false)
+  useEffect(() => setRetryAcknowledged(false), [sub?.id, sub?.status])
   const isAbsent = listing.presenceStatus === "absent"
   const isRelisted = !isAbsent && sub?.status === "removed"
   return (
@@ -659,7 +667,7 @@ function OptOutRow({
         </div>
       )}
 
-      {(!sub || isRelisted) && !isAbsent && (
+      {(!sub || isRelisted || sub.status === "failed" || sub.status === "cancelled") && !isAbsent && (
         <button className="btn-primary" disabled={!contactEmail || !!busy} onClick={onPrepare} title={!contactEmail ? "Set a contact email above first" : ""}>
           {busy === `p-${listing.id}`
             ? "Filling form (Solari session)…"
@@ -678,14 +686,34 @@ function OptOutRow({
 
       {!isAbsent && sub?.status === "prepared" && (
         <div className="flex gap-2 flex-wrap">
-          <button className="btn-primary" disabled={!!busy} onClick={onApprove}>
+          <button className="btn-primary" disabled={!!busy} onClick={() => onApprove()}>
             {busy === `a-${listing.id}` ? "Submitting…" : "Approve & submit"}
           </button>
           <button className="btn-secondary" disabled={!!busy} onClick={onCancel}>Cancel</button>
         </div>
       )}
 
-      {!isAbsent && (sub?.status === "awaiting_email" || sub?.status === "submitted") && (
+      {sub?.status === "approved" && (
+        <button className="btn-secondary" disabled={!!busy} onClick={onCancel}>Cancel queued request</button>
+      )}
+
+      {sub?.status === "attention_required" && (
+        <div className="space-y-3 border-l border-white/30 pl-3">
+          <p>The broker may already have received this action. Check your inbox and the broker result before retrying.</p>
+          {!isAbsent && (
+            <label className="flex items-start gap-2 text-zinc-400">
+              <input type="checkbox" checked={retryAcknowledged} onChange={(event) => setRetryAcknowledged(event.target.checked)} className="mt-1 accent-white" />
+              I checked and understand a retry could duplicate the request.
+            </label>
+          )}
+          {sub.attentionOperation === "submit" && !isAbsent && (
+            <button className="btn-primary" disabled={!!busy || !retryAcknowledged} onClick={() => onApprove(true)}>Retry submission</button>
+          )}
+          <button className="btn-secondary ml-2" disabled={!!busy} onClick={onCancel}>Close attempt locally</button>
+        </div>
+      )}
+
+      {!isAbsent && (sub?.status === "awaiting_email" || (sub?.status === "attention_required" && sub.attentionOperation === "confirm")) && (
         <div className="space-y-2">
           <p className="text-zinc-400">
             Check your inbox for the broker&apos;s confirmation email, paste the link here, and
@@ -698,7 +726,7 @@ function OptOutRow({
               value={confirmUrl}
               onChange={(e) => onConfirmUrlChange(e.target.value)}
             />
-            <button className="btn-primary" disabled={!confirmUrl || !!busy} onClick={onConfirmEmail}>
+            <button className="btn-primary" disabled={!confirmUrl || !!busy || (sub.status === "attention_required" && !retryAcknowledged)} onClick={() => onConfirmEmail(sub.status === "attention_required" && retryAcknowledged)}>
               {busy === `e-${listing.id}` ? "Confirming…" : "Confirm removal"}
             </button>
           </div>

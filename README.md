@@ -70,6 +70,10 @@ opt-out flow keeps the same residential IP while Solari's 30-minute pin remains 
   optional Groq scoring.
 - ✋ **A hard approval gate** — forms are filled, screenshotted, and parked. Nothing submits
   until you click approve.
+- **Recoverable opt-outs** — approval is tied to one preview and attempt. Double-clicks reuse
+  that attempt; approved work resumes after restart. If a broker click was interrupted, the
+  queue asks you to review the outcome before an explicit retry because it may already have
+  reached the broker. Cancelled attempts remain in local history.
 - 🧾 **Evidence for every action** — full-page screenshots on disk plus a Solari session replay
   for the scan, the submit, and the email confirmation.
 - 🔁 **Conservative removal verification** — re-scans record `found`, `clear`, or
@@ -146,6 +150,7 @@ npm run typecheck       # strict TS, zero errors
 npm run smoke           # adapter sanity checks (no API keys needed)
 npm run smoke:store     # store transactions + cleanup jail (throwaway temp DB)
 npm run smoke:security  # localhost boundary, origin, input, and URL checks
+npm run smoke:workflow  # synthetic broker: duplicate clicks, retries, restart recovery
 npm run check           # run every check plus a production build
 npm run dev             # dashboard
 ```

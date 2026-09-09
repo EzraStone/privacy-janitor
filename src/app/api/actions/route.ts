@@ -1,10 +1,6 @@
 import { NextRequest } from "next/server"
 import { ok, fail, failFromError, readJson } from "../_lib"
-import {
-  prepareListingOptOut,
-  submitApprovedOptOut,
-  confirmOptOutEmail,
-} from "@/engine/orchestrator"
+import { optOuts } from "@/engine/optouts"
 import { scoreExposure } from "@/scoring"
 import * as store from "@/store"
 import {
@@ -25,6 +21,8 @@ export async function POST(req: NextRequest) {
         | "confirm-email"
         | "score"
       listingId?: string
+      submissionId?: string
+      retryAcknowledged?: boolean
       identityId?: string
       contactEmail?: string
       confirmationUrl?: string
@@ -34,33 +32,32 @@ export async function POST(req: NextRequest) {
       case "prepare-optout": {
         if (!body.listingId || !body.contactEmail)
           return fail("listingId and contactEmail are required")
-        const res = await prepareListingOptOut(body.listingId, body.contactEmail)
-        return ok(res)
+        const submission = await optOuts.prepare(body.listingId, body.contactEmail)
+        return ok({ submission })
       }
 
       case "approve-optout": {
-        if (!body.listingId) return fail("listingId required")
-        await submitApprovedOptOut(body.listingId)
-        return ok({ done: true })
+        if (!body.listingId || !body.submissionId) return fail("listingId and submissionId required")
+        const submission = optOuts.approve(body.listingId, body.submissionId, body.retryAcknowledged === true)
+        return ok({ submission }, 202)
       }
 
       case "cancel-optout": {
-        if (!body.listingId) return fail("listingId required")
-        store.deletePreparedOptOut(body.listingId)
-        return ok({ done: true })
+        if (!body.listingId || !body.submissionId) return fail("listingId and submissionId required")
+        return ok({ submission: store.cancelSubmission(body.listingId, body.submissionId) })
       }
 
       case "confirm-email": {
-        if (!body.listingId || !body.confirmationUrl)
-          return fail("listingId and confirmationUrl are required")
+        if (!body.listingId || !body.submissionId || !body.confirmationUrl)
+          return fail("listingId, submissionId, and confirmationUrl are required")
         const listing = store.getListing(body.listingId)
         if (!listing) return fail("listing not found", 404)
         const confirmationUrl = validateBrokerConfirmationUrl(
           body.confirmationUrl,
           listing.brokerId,
         )
-        await confirmOptOutEmail(body.listingId, confirmationUrl)
-        return ok({ done: true })
+        const submission = optOuts.confirm(body.listingId, body.submissionId, confirmationUrl, body.retryAcknowledged === true)
+        return ok({ submission }, 202)
       }
 
       case "score": {
