@@ -20,10 +20,12 @@ import type {
 import { newId } from "../store/index.ts"
 import {
   classifyBrokerScan,
+  clickOnce,
+  requireBrokerReceipt,
+  requireProfileName,
   firstVisible,
   inspectBrokerSearchPage,
   tryAllTexts,
-  tryClick,
   tryInnerText,
   scoreMatch,
   isPersonProfileSlug,
@@ -118,14 +120,13 @@ export const fastpeoplesearch: BrokerAdapter = {
 
         // FPS hydrates profiles client-side; "Loading Search Results..." in
         // <h1> means it isn't done. Poll until real content or ~10s cap.
-        const deadline = Date.now() + 10_000
-        while (Date.now() < deadline) {
+        for (let attempt = 0; attempt < 10; attempt++) {
           const h1 = (await tryInnerText(page, "h1")) ?? ""
           if (h1 && !h1.toLowerCase().includes("loading")) break
           await page.waitForTimeout(1_000)
         }
 
-        const displayName = (await tryInnerText(page, "h1")) ?? identity.fullName
+        const displayName = await requireProfileName(page, identity)
 
         const exposedData: Listing["exposedData"] = {
           addresses: await tryAllTexts(page, [
@@ -226,8 +227,9 @@ export const fastpeoplesearch: BrokerAdapter = {
     // Subject's name (the person being removed — our identity).
     const first = await firstVisible(page, ['input#firstname', 'input[name="firstname"]'])
     const last = await firstVisible(page, ['input#lastname', 'input[name="lastname"]'])
-    if (first) await first.fill(identity.fullName.split(" ")[0])
-    if (last) await last.fill(identity.fullName.split(" ").slice(-1)[0])
+    if (!first || !last) throw new Error("FastPeopleSearch opt-out: subject name fields not found")
+    await first.fill(identity.fullName.split(" ")[0])
+    await last.fill(identity.fullName.split(" ").slice(-1)[0])
 
     const email = await firstVisible(page, ['input#email', 'input[name="email"]', 'input[type="email"]'])
     if (!email) throw new Error("FastPeopleSearch opt-out: email field not found")
@@ -256,7 +258,7 @@ export const fastpeoplesearch: BrokerAdapter = {
   // ── opt-out: submit ───────────────────────────────────────────────────────
 
   async submitOptOut(page, _prepared: PreparedOptOut): Promise<OptOutReceipt> {
-    const clicked = await tryClick(page, [
+    const clicked = await clickOnce(page, [
       'button:has-text("Submit")',
       'button:has-text("Remove me")',
       'input[type="submit"]',
@@ -265,11 +267,7 @@ export const fastpeoplesearch: BrokerAdapter = {
     if (!clicked) throw new Error("FastPeopleSearch opt-out: submit button not found")
 
     await page.waitForTimeout(5_000)
-    const banner =
-      (await tryInnerText(page, 'div[class*="success"]')) ??
-      (await tryInnerText(page, 'div[class*="confirm"]')) ??
-      (await tryInnerText(page, "h1")) ??
-      "Removal request submitted — check your email."
+    const banner = await requireBrokerReceipt(page, "submit")
 
     const screenshot = await page.screenshot({ fullPage: true })
     return { ok: true, message: banner, screenshot, needsEmailConfirmation: true }
@@ -284,11 +282,12 @@ export const fastpeoplesearch: BrokerAdapter = {
     // FPS's confirmation page often re-asks for the email; the engine can't
     // know it here, so if required, this step fails loudly and the UI will
     // surface instructions. Most variants complete on link click + one press.
-    await tryClick(page, [
+    await clickOnce(page, [
       'button:has-text("Confirm")',
       'button:has-text("Verify")',
       'a:has-text("Confirm")',
     ])
     await page.waitForTimeout(2_000)
+    await requireBrokerReceipt(page, "confirm")
   },
 }

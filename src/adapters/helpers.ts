@@ -17,7 +17,9 @@ const CHALLENGE_MARKERS = [
   "access denied",
   "temporarily blocked",
   "just a moment",
-  "captcha",
+  "complete the captcha",
+  "solve the captcha",
+  "captcha verification failed",
   "rate limit",
   "too many requests",
 ]
@@ -197,6 +199,76 @@ export async function firstVisible(
     }
   }
   return null
+}
+
+/** Select a fallback before clicking; never retry a potentially completed action. */
+export async function clickOnce(page: BrokerPage, selectors: string[]): Promise<boolean> {
+  const button = await firstVisible(page, selectors)
+  if (!button) return false
+  await button.click()
+  return true
+}
+
+/** A URL match alone is not evidence that a profile actually loaded. */
+export async function requireProfileName(
+  page: BrokerPage,
+  identity: { fullName: string },
+): Promise<string> {
+  const body = ((await tryInnerText(page, "body")) ?? "").toLowerCase()
+  const heading = await tryInnerText(page, "h1")
+  const tokens: string[] = (heading ?? "").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
+  const wanted: string[] = identity.fullName.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
+  if (!heading || CHALLENGE_MARKERS.some((marker) => body.includes(marker)) ||
+      /loading|not found|unavailable/i.test(heading) || wanted.length < 2 ||
+      !tokens.includes(wanted.at(-1)!) || !tokens.some((token) => token.startsWith(wanted[0].slice(0, 2)))) {
+    throw new Error("Profile content could not be verified; no listing was inferred from the search URL.")
+  }
+  return heading
+}
+
+const RECEIPT_SELECTORS = [
+  '[role="status"]', '[role="alert"]', '[data-testid*="success" i]',
+  'div[class*="success"]', 'div[class*="confirm"]', 'h1',
+]
+const RECEIPT_ERRORS = /\b(?:not|failed|unable|cannot|invalid|expired|error|required|please enter)\b/i
+const REQUEST_ACK = /^(?:thank you[!.,]\s*)?(?:your\s+)?(?:(?:removal|opt-out|suppression)\s+)?request\s+(?:(?:has been|was)\s+)?(?:successfully\s+)?(?:received|submitted|accepted)[.!\s]*$/i
+const EMAIL_ACK = /^(?:please\s+)?check your (?:email|inbox)(?: for (?:a |the )?confirmation (?:email|link))?[.!\s]*$/i
+const CONFIRM_ACK = /^(?:your\s+)?(?:(?:removal|opt-out|suppression)\s+)?(?:request|email)\s+(?:(?:has been|was|is now)\s+)?(?:successfully\s+)?(?:confirmed|verified)[.!\s]*$/i
+const REMOVAL_ACK = /^(?:your\s+)?(?:listing|record|profile|information)\s+(?:(?:has been|was)\s+)(?:successfully\s+)?removed[.!\s]*$/i
+
+/**
+ * Require an affirmative, visible broker receipt. These conservative patterns
+ * are fixture-tested, not a promise about today's live DOM. Unknown responses
+ * throw so the durable workflow asks for review instead of inventing success.
+ */
+export async function requireBrokerReceipt(page: BrokerPage, stage: "submit" | "confirm"): Promise<string> {
+  const body = ((await tryInnerText(page, "body")) ?? "").toLowerCase()
+  if (CHALLENGE_MARKERS.some((marker) => body.includes(marker))) {
+    throw new Error("Broker challenge remains; the request outcome is uncertain. Review before retrying.")
+  }
+  if (stage === "confirm" && await firstVisible(page, ['input[type="email"]', 'input[name="email"]', 'input#email'])) {
+    throw new Error("Broker confirmation still asks for an email address. Complete it on the official site and review the result.")
+  }
+  const messages: string[] = []
+  for (const selector of RECEIPT_SELECTORS) {
+    const matches = page.locator(selector)
+    const count = Math.min(await matches.count(), 10)
+    for (let index = 0; index < count; index++) {
+      const match = matches.nth(index)
+      if (await match.isVisible()) messages.push((await match.innerText()).trim())
+    }
+  }
+  // Negative banners win over stale positive banners elsewhere on the page.
+  if (messages.some((message) => RECEIPT_ERRORS.test(message))) {
+    throw new Error("Broker displayed an error or an unfinished step. Review the page before retrying.")
+  }
+  for (const message of messages) {
+    const sentences = message.split(/(?<=[.!])\s+|\n+/).map((text) => text.trim())
+    const accepted = stage === "submit" ? [REQUEST_ACK, EMAIL_ACK, CONFIRM_ACK, REMOVAL_ACK] : [CONFIRM_ACK, REMOVAL_ACK]
+    if (stage === "confirm" && /check your (?:email|inbox)|confirmation link|confirm your email/i.test(message)) continue
+    if (sentences.some((sentence) => accepted.some((pattern) => pattern.test(sentence)))) return message
+  }
+  throw new Error("No recognized broker receipt was found. The action may have completed; review before retrying.")
 }
 
 /** Inner text of the first visible match, or undefined. */

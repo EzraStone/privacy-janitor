@@ -8,7 +8,7 @@
  *        email confirmation link (user pastes) -> final confirm click.
  *
  * NOTE: broker DOMs change without notice. Selectors here use layered
- * fallbacks; the smoke test (scripts/smoke.mjs) catches drift early.
+ * fallbacks; offline adapter fixtures check known behavior, not live selector drift.
  * Whitepages hard-blocks non-browser clients, so every flow here REQUIRES
  * the Solari stealth session the engine provides.
  */
@@ -24,6 +24,9 @@ import type {
 import { newId } from "../store/index.ts"
 import {
   classifyBrokerScan,
+  clickOnce,
+  requireBrokerReceipt,
+  requireProfileName,
   firstVisible,
   inspectBrokerSearchPage,
   tryAllTexts,
@@ -109,8 +112,7 @@ export const whitepages: BrokerAdapter = {
         await page.goto(url, { waitUntil: "domcontentloaded" })
         await page.waitForTimeout(2_500)
 
-        const displayName =
-          (await tryInnerText(page, 'h1')) ?? identity.fullName
+        const displayName = await requireProfileName(page, identity)
 
         const exposedData: Listing["exposedData"] = {
           addresses: await tryAllTexts(page, [
@@ -231,7 +233,8 @@ export const whitepages: BrokerAdapter = {
       'input[type="email"]',
       'input[id*="email" i]',
     ])
-    if (email) await email.fill(contactEmail)
+    if (!email) throw new Error("Whitepages opt-out: email field not found")
+    await email.fill(contactEmail)
 
     const firstNameField = await firstVisible(page, [
       'input[name="first_name"]',
@@ -272,11 +275,7 @@ export const whitepages: BrokerAdapter = {
 
     // Post-submit: confirmation banner or email-pending notice.
     await page.waitForTimeout(5_000)
-    const banner =
-      (await tryInnerText(page, 'div[class*="success"]')) ??
-      (await tryInnerText(page, 'div[class*="confirm"]')) ??
-      (await tryInnerText(page, "h1")) ??
-      "Request submitted. Check your email for the confirmation link."
+    const banner = await requireBrokerReceipt(page, "submit")
 
     const screenshot = await page.screenshot({ fullPage: true })
     return {
@@ -301,6 +300,7 @@ export const whitepages: BrokerAdapter = {
     ])
     if (finalBtn) await finalBtn.click()
     await page.waitForTimeout(2_000)
+    await requireBrokerReceipt(page, "confirm")
   },
 }
 

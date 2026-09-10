@@ -14,7 +14,8 @@
     "smoke:store": "node --experimental-strip-types scripts/smoke-store.mts",
     "smoke:security": "node --experimental-strip-types scripts/smoke-security.mts",
     "smoke:workflow": "node --experimental-strip-types scripts/smoke-workflow.mts",
-    "check": "npm run typecheck && npm run smoke && npm run smoke:store && npm run smoke:security && npm run smoke:workflow && npm run build",
+    "smoke:adapters": "node --experimental-strip-types scripts/smoke-adapters.mts",
+    "check": "npm run typecheck && npm run smoke && npm run smoke:store && npm run smoke:security && npm run smoke:workflow && npm run smoke:adapters && npm run build",
     "scan": "node scripts/scan.mjs"
   },
   "dependencies": {

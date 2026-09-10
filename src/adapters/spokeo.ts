@@ -19,10 +19,12 @@ import type {
 import { newId } from "../store/index.ts"
 import {
   classifyBrokerScan,
+  clickOnce,
+  requireBrokerReceipt,
+  requireProfileName,
   firstVisible,
   inspectBrokerSearchPage,
   tryAllTexts,
-  tryClick,
   tryInnerText,
   scoreMatch,
   isPersonProfileSlug,
@@ -109,8 +111,7 @@ export const spokeo: BrokerAdapter = {
         await page.goto(url, { waitUntil: "domcontentloaded" })
         await page.waitForTimeout(2_500)
 
-        const displayName =
-          (await tryInnerText(page, "h1")) ?? decodeURIComponent(url.split("/").pop() ?? "")
+        const displayName = await requireProfileName(page, identity)
 
         const exposedData: Listing["exposedData"] = {
           addresses: await tryAllTexts(page, [
@@ -221,7 +222,7 @@ export const spokeo: BrokerAdapter = {
   // ── opt-out: submit ───────────────────────────────────────────────────────
 
   async submitOptOut(page, _prepared: PreparedOptOut): Promise<OptOutReceipt> {
-    const clicked = await tryClick(page, [
+    const clicked = await clickOnce(page, [
       'button:has-text("Submit")',
       'input[type="submit"]',
       'button[type="submit"]',
@@ -229,11 +230,7 @@ export const spokeo: BrokerAdapter = {
     if (!clicked) throw new Error("Spokeo opt-out: submit button not found")
 
     await page.waitForTimeout(5_000)
-    const banner =
-      (await tryInnerText(page, 'div[class*="success"]')) ??
-      (await tryInnerText(page, 'div[class*="confirm"]')) ??
-      (await tryInnerText(page, "h1")) ??
-      "Request submitted — check your email for the confirmation link."
+    const banner = await requireBrokerReceipt(page, "submit")
 
     const screenshot = await page.screenshot({ fullPage: true })
     return { ok: true, message: banner, screenshot, needsEmailConfirmation: true }
@@ -246,12 +243,13 @@ export const spokeo: BrokerAdapter = {
     await page.waitForTimeout(3_000)
     // Spokeo's confirmation link usually completes removal on click; some
     // variants ask for one more "Confirm" press.
-    await tryClick(page, [
+    await clickOnce(page, [
       'button:has-text("Confirm")',
       'a:has-text("Confirm")',
       'button:has-text("Remove")',
     ])
     await page.waitForTimeout(2_000)
+    await requireBrokerReceipt(page, "confirm")
   },
 }
 
