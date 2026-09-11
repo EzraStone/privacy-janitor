@@ -1,5 +1,6 @@
 /**
- * Live opt-out PREPARE test (stops before submit — nothing is ever sent).
+ * Live opt-out PREPARE test (stops before the final removal submission).
+ * Entered fields still reach Solari and may reach the broker while preparing.
  * Verifies: form loads, URL+email fill, screenshot captured. No submit,
  * so no removal request is filed. Uses a synthetic listing for Spokeo's
  * optout form with a fake profile URL (form accepts text; we cancel before

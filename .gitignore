@@ -13,7 +13,14 @@ next-env.d.ts
 !.env.example
 
 # local data: sqlite db, evidence screenshots, solari replays
-data/
+/data/
+/evidence/
+/traces/
+*.db
+*.db-*
+*.sqlite*
+*.har
+*.log
 
 # misc
 .DS_Store

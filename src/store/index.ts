@@ -1,6 +1,7 @@
 /**
- * Local SQLite store — the ONLY place user data lives. No network, no
- * telemetry, no accounts. File: data/privacy-janitor.db (gitignored).
+ * Local SQLite persistence. Screenshots also live on disk; the separate
+ * browser/scoring engines send data to providers. This module has no network.
+ * File: data/privacy-janitor.db (gitignored).
  *
  * Uses Node's built-in node:sqlite (Node 22.5+/24) so the project has zero
  * native-build dependencies — `npm install` just works on any OS.

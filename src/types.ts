@@ -8,9 +8,8 @@
  *   confirmation click -> receipt with evidence -> later: rescan + diff.
  */
 
-/** Who we are searching for. Stored locally, never leaves the machine except
- *  inside broker-site searches (which is the whole point) and tokenized LLM
- *  prompts (see scoring/redact.ts). */
+/** Who we are searching for. Persisted locally; search/form fields also reach
+ *  Solari and broker sites. Optional Groq prompts use tokenized values. */
 export interface Identity {
   id: string
   fullName: string
@@ -66,7 +65,7 @@ export type SubmissionStatus =
   | "submitted" // opt-out request sent to broker
   | "awaiting_email" // broker sent confirmation email; waiting on user to paste link
   | "confirming" // confirmation click may be in flight
-  | "confirmed" // confirmation link clicked; removal in progress at broker
+  | "confirmed" // affirmative broker confirmation observed; rescan still required
   | "removed" // rescan verified listing is gone
   | "attention_required" // interrupted remote action; explicit retry acknowledgement required
   | "failed" // something broke — see lastError

@@ -165,8 +165,8 @@ export default function Home() {
         <p className="mt-4 max-w-2xl text-sm leading-6 text-zinc-500">
           Profiles, findings, and evidence are saved locally in{" "}
           <code className="rounded bg-white/5 px-1.5 py-0.5 text-zinc-300">data/</code>.
-          Broker scans run through recorded Solari browser sessions, and nothing is submitted
-          to a broker without your approval.
+          Searches and form previews send details to Solari and the broker sites.
+          Removal requests require your approval. Solari sessions are recorded remotely.
         </p>
       </header>
 
@@ -371,7 +371,8 @@ export default function Home() {
               </div>
               <p className="text-xs text-zinc-500">
                 Optional Groq scoring receives tokenized listing and profile-location fields;
-                literal names, addresses, phone numbers, emails, cities, and states stay local.
+                redaction reduces disclosure but does not guarantee anonymity. Skip scoring
+                if you do not want to send this information to Groq.
               </p>
             </div>
           ) : (

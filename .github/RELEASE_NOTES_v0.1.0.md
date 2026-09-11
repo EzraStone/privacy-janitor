@@ -1,5 +1,12 @@
 # PrivacyJanitor v0.1.0 — first public release
 
+> Historical release text below is preserved for context, not current validation.
+> Correction (2026-09-10): “100% local,” guaranteed removal, pricing comparisons,
+> and universal live-verification claims below should not be relied on. Storage is
+> local, but Solari processes broker interactions remotely and optional Groq scoring
+> receives tokenized fields. Offline fixtures do not verify today's broker websites.
+> See the current [README](../README.md) for limitations and the privacy model.
+
 Find your personal data on people-search sites — and make it disappear.
 
 PrivacyJanitor scans data brokers for your listings, ranks your exposure, and automates the **official opt-out flows** through [Solari](https://getsolari.com) stealth browsers — with screenshot and session-replay evidence for every action. Local-first and free, against Incogni's $30/mo.

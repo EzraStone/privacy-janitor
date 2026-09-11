@@ -6,7 +6,8 @@
  * score the STRUCTURE of exposure, and map results back locally.
  *
  * The LLM sees: "[NAME_1] appears on Broker B with [ADDR_1], [PHONE_1] and
- * two relatives." — enough to reason about risk, nothing to re-identify.
+ * two relatives." Tokenization reduces disclosure; it is not a guarantee of
+ * anonymity or protection against every future field or unrecognized format.
  */
 import type { Identity, Listing } from "@/types"
 
@@ -108,6 +109,6 @@ export function redactListing(listing: Listing, map: RedactionMap): string {
     parts.push(`relatives_listed: ${e.relatives.map((x) => redactText(x, map)).join(" | ")}`)
   if (e.aliases?.length)
     parts.push(`aliases: ${e.aliases.map((x) => redactText(x, map)).join(" | ")}`)
-  if (e.age) parts.push(`age_band: ${e.age.includes("-") ? e.age : "single_value"}`)
+  if (e.age) parts.push(`age_band: ${/^\d{1,3}\s*-\s*\d{1,3}$/.test(e.age) ? e.age : "single_value"}`)
   return parts.join("\n")
 }

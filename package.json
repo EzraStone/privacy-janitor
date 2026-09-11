@@ -6,16 +6,18 @@
   "engines": { "node": ">=24.0.0" },
   "description": "Local-first, open-source data-broker removal agent powered by Solari stealth browsers",
   "scripts": {
-    "dev": "next dev -H 127.0.0.1",
-    "build": "next build",
-    "start": "next start -H 127.0.0.1",
+    "dev": "node scripts/run-next.mjs dev -H 127.0.0.1",
+    "build": "node scripts/run-next.mjs build",
+    "start": "node scripts/run-next.mjs start -H 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "smoke": "node --experimental-strip-types scripts/smoke.mts",
     "smoke:store": "node --experimental-strip-types scripts/smoke-store.mts",
     "smoke:security": "node --experimental-strip-types scripts/smoke-security.mts",
     "smoke:workflow": "node --experimental-strip-types scripts/smoke-workflow.mts",
     "smoke:adapters": "node --experimental-strip-types scripts/smoke-adapters.mts",
-    "check": "npm run typecheck && npm run smoke && npm run smoke:store && npm run smoke:security && npm run smoke:workflow && npm run smoke:adapters && npm run build",
+    "smoke:privacy": "node --experimental-strip-types scripts/smoke-privacy.mts",
+    "check:repo": "node --experimental-strip-types scripts/check-repo-data.mts",
+    "check": "npm run typecheck && npm run smoke && npm run smoke:store && npm run smoke:security && npm run smoke:workflow && npm run smoke:adapters && npm run smoke:privacy && npm run check:repo && npm run build",
     "scan": "node scripts/scan.mjs"
   },
   "dependencies": {
