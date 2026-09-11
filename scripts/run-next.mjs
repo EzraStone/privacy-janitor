@@ -2,6 +2,10 @@ import { spawn } from "node:child_process"
 import { createRequire } from "node:module"
 
 const require = createRequire(import.meta.url)
+if (Number(process.versions.node.split(".")[0]) < 24) {
+  console.error("PrivacyJanitor requires Node.js 24 or newer. Update Node, then run npm install again.")
+  process.exit(1)
+}
 const [command, ...args] = process.argv.slice(2)
 if (!["dev", "build", "start"].includes(command)) {
   console.error("Usage: node scripts/run-next.mjs <dev|build|start>")

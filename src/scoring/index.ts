@@ -9,6 +9,7 @@
 import Groq from "groq-sdk"
 import type { Identity, Listing } from "@/types"
 import { buildRedactionMap, redactListing, redactText } from "./redact.ts"
+import { keyStatus } from "../config/setup.ts"
 
 export interface ListingRisk {
   listingId: string
@@ -37,8 +38,8 @@ export async function scoreExposure(
   identity: Identity,
   listings: Listing[],
 ): Promise<ExposureReport> {
-  const apiKey = process.env.GROQ_API_KEY
-  if (!apiKey || apiKey.startsWith("gsk_xxx")) {
+  const apiKey = process.env.GROQ_API_KEY?.trim()
+  if (!apiKey || keyStatus(apiKey) !== "configured") {
     throw new Error(
       "GROQ_API_KEY is not set. Exposure scoring is optional — add a key from https://console.groq.com to .env",
     )

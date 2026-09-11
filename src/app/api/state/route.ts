@@ -6,14 +6,17 @@ import { optOuts } from "@/engine/optouts"
 import { removeEvidencePaths } from "@/engine/cleanup"
 import type { Identity } from "@/types"
 import { assertTrustedLocalRequest } from "@/security/requests"
+import { keyStatus, requireScanSetup } from "@/config/setup"
 
 export const dynamic = "force-dynamic"
 
 export async function GET(req: NextRequest) {
   try {
     assertTrustedLocalRequest(req)
-    resumeIncompleteScans()
-    optOuts.resume()
+    if (keyStatus(process.env.SOLARI_API_KEY) === "configured") {
+      resumeIncompleteScans()
+      optOuts.resume()
+    }
     return ok({
       identities: store.listIdentities(),
       listings: store.listListings(),
@@ -65,6 +68,7 @@ export async function POST(req: NextRequest) {
       case "rescan": {
         if (!body.identityId) return fail("identityId required")
         if (!store.getIdentity(body.identityId)) return fail("identity not found", 404)
+        requireScanSetup()
         const { run, resumed, conflict } = startScan(
           body.identityId,
           body.action === "rescan" ? "rescan" : "scan",

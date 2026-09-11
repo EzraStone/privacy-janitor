@@ -17,6 +17,7 @@ import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { BrokerPage } from "@/types"
 import { getEvidenceDir } from "../config/paths.ts"
+import { keyStatus } from "../config/setup.ts"
 
 export interface RunEvidence {
   runId: string
@@ -35,8 +36,8 @@ type SolariGlobal = typeof globalThis & {
 const solariGlobal = globalThis as SolariGlobal
 
 export function getSolariClient(): Solari {
-  const apiKey = process.env.SOLARI_API_KEY
-  if (!apiKey || apiKey.startsWith("slr_live_xxx")) {
+  const apiKey = process.env.SOLARI_API_KEY?.trim()
+  if (!apiKey || keyStatus(apiKey) !== "configured") {
     throw new Error(
       "SOLARI_API_KEY is not set. Copy .env.example to .env and add your key from https://console.getsolari.com",
     )
@@ -85,16 +86,12 @@ export function createProxySessionId(scope: string): string {
  */
 const PROXY_SESSION_MINUTES = 30
 
-/** Launch options that degrade to the free plan when stealth is paywalled. */
+/** Required broker capabilities. Unsupported plans fail with setup guidance. */
 const STEALTH_RECIPE = {
   stealth: true,
   captcha: true,
   recording: true,
   proxy: { country: "us", session: "", sessionDuration: PROXY_SESSION_MINUTES },
-} as const
-
-const DEFAULT_RECIPE = {
-  recording: true,
 } as const
 
 export async function launchResilient(
@@ -112,16 +109,12 @@ export async function launchResilient(
     })
     return { browser, stealth: true }
   } catch (err) {
-    // 402 FeatureRequiresPlan: free plan has no stealth/captcha/proxy.
-    // Degrade to the default browser rather than fail the whole run.
     const msg = err instanceof Error ? err.message : String(err)
     if (msg.includes("FeatureRequiresPlan") || msg.includes("paid plan")) {
-      console.warn(
-        `[solari] stealth mode unavailable on this plan — falling back to the default browser. ` +
-          `Scans still work on most brokers; captcha-gated opt-outs need a paid plan.`,
+      throw new Error(
+        "Your Solari provider plan does not support the requested browser capabilities. " +
+        "Check stealth, residential proxy, CAPTCHA and recording access in the Solari console before retrying. No fallback browser was opened.",
       )
-      const browser = await client.launch(DEFAULT_RECIPE)
-      return { browser, stealth: false }
     }
     throw err
   }

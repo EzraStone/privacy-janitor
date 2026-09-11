@@ -69,12 +69,19 @@ cd privacy-janitor
 npm install
 cp .env.example .env
 # Edit .env: SOLARI_API_KEY required, GROQ_API_KEY optional
+npm run doctor
 npm run dev
 ```
 
 On Windows PowerShell, use `Copy-Item .env.example .env` in place of `cp`.
 Open the loopback URL printed by the server (normally [localhost:3000](http://localhost:3000)).
 Restart the app after changing API keys.
+
+The setup panel and `npm run doctor` check key presence, Node compatibility, and local
+folder access. They never contact providers or print keys. “Configured” does not mean
+the key or provider plan has been validated. Missing configuration blocks scans but
+does not prevent you from adding profiles. Use the dashboard to run scans; the old
+`npm run scan` shortcut pointed to a missing file and has been removed.
 
 | Setting | Purpose |
 |---------|---------|
@@ -86,6 +93,8 @@ Restart the app after changing API keys.
 The application requests stealth browsing, a residential proxy, CAPTCHA support, and recording.
 Your provider plan and the live broker's behavior determine what works. Having an API key alone
 does not establish access to these capabilities.
+If the provider rejects the requested capabilities, the app stops with setup guidance;
+it does not silently open a second, less capable session.
 
 ## Broker coverage
 
@@ -140,6 +149,9 @@ npm run smoke:security  # localhost, origin, input and confirmation URL checks
 npm run smoke:workflow  # synthetic broker: approval, duplicate clicks, retries, restart
 npm run smoke:adapters  # real adapters against synthetic selector fixtures
 npm run smoke:privacy   # repository guard and redaction regression checks
+npm run smoke:setup     # configuration, storage, and unsupported-plan checks
+npm run smoke:http      # built app on loopback with an isolated synthetic profile
+npm run doctor          # local setup diagnostics; no provider calls
 npm run check:repo      # inspect indexed paths/content, without printing key values
 npm run check           # all checks plus production build
 npm audit --omit=dev    # current dependency advisories
@@ -151,11 +163,10 @@ sensitive debugging output.
 
 ### Next development milestones
 
-1. Finish setup diagnostics and actionable onboarding errors.
-2. Run a small, explicitly consented live beta; document each broker's actual result and
+1. Run a small, explicitly consented live beta; document each broker's actual result and
    validation date without publishing personal evidence.
-3. Improve adapters from those observations, then add brokers one at a time with fixtures.
-4. Evaluate a packaged desktop release. Public hosting requires a separate authentication,
+2. Improve adapters from those observations, then add brokers one at a time with fixtures.
+3. Evaluate a packaged desktop release. Public hosting requires a separate authentication,
    user-isolation, secrets, retention, and security design.
 
 ## Contributing

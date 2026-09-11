@@ -3,6 +3,7 @@ import { ok, fail, failFromError, readJson } from "../_lib"
 import { optOuts } from "@/engine/optouts"
 import { scoreExposure } from "@/scoring"
 import * as store from "@/store"
+import { requireScanSetup } from "@/config/setup"
 import {
   assertTrustedLocalRequest,
   validateBrokerConfirmationUrl,
@@ -32,12 +33,14 @@ export async function POST(req: NextRequest) {
       case "prepare-optout": {
         if (!body.listingId || !body.contactEmail)
           return fail("listingId and contactEmail are required")
+        requireScanSetup()
         const submission = await optOuts.prepare(body.listingId, body.contactEmail)
         return ok({ submission })
       }
 
       case "approve-optout": {
         if (!body.listingId || !body.submissionId) return fail("listingId and submissionId required")
+        requireScanSetup()
         const submission = optOuts.approve(body.listingId, body.submissionId, body.retryAcknowledged === true)
         return ok({ submission }, 202)
       }
@@ -50,6 +53,7 @@ export async function POST(req: NextRequest) {
       case "confirm-email": {
         if (!body.listingId || !body.submissionId || !body.confirmationUrl)
           return fail("listingId, submissionId, and confirmationUrl are required")
+        requireScanSetup()
         const listing = store.getListing(body.listingId)
         if (!listing) return fail("listing not found", 404)
         const confirmationUrl = validateBrokerConfirmationUrl(

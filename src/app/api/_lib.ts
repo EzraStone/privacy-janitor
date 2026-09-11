@@ -1,6 +1,5 @@
 /**
- * Next.js server config for API routes. Loads .env at dev-time too (Next
- * only auto-loads it for `next dev`; scripts use dotenv themselves).
+ * Shared JSON responses and bounded request parsing for the local API.
  */
 import { NextResponse } from "next/server"
 import { RequestValidationError } from "@/security/requests"

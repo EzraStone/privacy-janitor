@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import type { Identity, Listing, ScanRun, Submission, SubmissionStatus } from "@/types"
 import type { ExposureReport } from "@/scoring"
 import { activeSubmissionStatuses } from "@/engine/submission-state"
+import type { SetupStatus } from "@/config/setup"
+import { SetupPanel } from "./setup-panel"
 
 interface StateResponse {
   identities: Identity[]
@@ -30,6 +32,10 @@ export default function Home() {
   const [state, setState] = useState<StateResponse | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [setup, setSetup] = useState<SetupStatus | null>(null)
+  const [setupError, setSetupError] = useState<string | null>(null)
+  const [checkingSetup, setCheckingSetup] = useState(false)
   const [report, setReport] = useState<ExposureReport | null>(null)
   const [contactEmail, setContactEmail] = useState("")
   const [confirmUrl, setConfirmUrl] = useState<Record<string, string>>({})
@@ -39,13 +45,36 @@ export default function Home() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refresh = useCallback(async () => {
-    const res = await fetch("/api/state")
-    if (res.ok) setState(await res.json())
+    try {
+      const res = await fetch("/api/state", { cache: "no-store" })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? "Could not load local data.")
+      setState(json)
+      setLoadError(null)
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Could not reach the local app.")
+    }
+  }, [])
+
+  const refreshSetup = useCallback(async () => {
+    setCheckingSetup(true)
+    try {
+      const res = await fetch("/api/setup", { cache: "no-store" })
+      if (!res.ok) throw new Error("Setup check unavailable. Restart the local app and try again.")
+      setSetup(await res.json())
+      setSetupError(null)
+    } catch (error) {
+      setSetup(null)
+      setSetupError(error instanceof Error ? error.message : "Could not check local setup.")
+    } finally {
+      setCheckingSetup(false)
+    }
   }, [])
 
   useEffect(() => {
     void refresh()
-  }, [refresh])
+    void refreshSetup()
+  }, [refresh, refreshSetup])
 
   // Default to first identity when none is selected.
   useEffect(() => {
@@ -176,6 +205,15 @@ export default function Home() {
         </div>
       )}
 
+      {loadError && (
+        <div role="alert" className="rounded-xl border border-white/20 p-4 text-sm text-zinc-300">
+          <p>Local data could not be refreshed: {loadError}</p>
+          <button className="btn-secondary mt-3" onClick={() => void refresh()}>Retry loading data</button>
+        </div>
+      )}
+
+      <SetupPanel status={setup} error={setupError} checking={checkingSetup} onCheck={() => void refreshSetup()} />
+
       {/* ── Profile bar ─────────────────────────────────────────────── */}
       <section className="panel space-y-5">
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -267,9 +305,9 @@ export default function Home() {
               if (res?.identity) {
                 setActiveIdentityId(res.identity.id as string)
                 setReport(null)
+                setShowIdentityForm(false)
+                setEditingIdentity(null)
               }
-              setShowIdentityForm(false)
-              setEditingIdentity(null)
             }}
           />
         )}
@@ -296,7 +334,7 @@ export default function Home() {
             </div>
             <button
               className="btn-primary"
-              disabled={!!busy || !identity}
+              disabled={!!busy || !identity || Boolean(activeScan) || !setup?.canStartScan}
               onClick={() => void stateAction({ action: "scan", identityId: identity.id }, "scan")}
             >
               {activeScan ? "Scanning…" : busy === "scan" ? "Starting…" : "Run broker scan"}
@@ -340,7 +378,7 @@ export default function Home() {
             </div>
             <button
               className="btn-primary"
-              disabled={!!busy}
+              disabled={!!busy || setup?.groq !== "configured"}
               onClick={() => void action({ action: "score", identityId: identity.id }, "score")}
             >
               {busy === "score" ? "Scoring (redacted, via Groq)…" : "Rank my exposure"}
@@ -411,6 +449,7 @@ export default function Home() {
                   listing={l}
                   sub={sub}
                   busy={busy}
+                  remoteReady={setup?.canStartScan === true}
                   contactEmail={contactEmail}
                   confirmUrl={confirmUrl[l.id] ?? ""}
                   onConfirmUrlChange={(v) => setConfirmUrl((m) => ({ ...m, [l.id]: v }))}
@@ -437,7 +476,7 @@ export default function Home() {
           </p>
           <button
             className="btn-secondary"
-            disabled={!!busy || Boolean(activeScan)}
+            disabled={!!busy || Boolean(activeScan) || !setup?.canStartScan}
             onClick={() => void stateAction({ action: "rescan", identityId: identity.id }, "rescan")}
           >
             {activeScan?.kind === "rescan" || busy === "rescan" ? "Verifying…" : "Re-scan & diff"}
@@ -618,12 +657,13 @@ function ListingCard({
 }
 
 function OptOutRow({
-  listing, sub, busy, contactEmail, confirmUrl, onConfirmUrlChange,
+  listing, sub, busy, remoteReady, contactEmail, confirmUrl, onConfirmUrlChange,
   onPrepare, onApprove, onCancel, onConfirmEmail,
 }: {
   listing: Listing
   sub?: Submission
   busy: string | null
+  remoteReady: boolean
   contactEmail: string
   confirmUrl: string
   onConfirmUrlChange: (v: string) => void
@@ -669,7 +709,7 @@ function OptOutRow({
       )}
 
       {(!sub || isRelisted || sub.status === "failed" || sub.status === "cancelled") && !isAbsent && (
-        <button className="btn-primary" disabled={!contactEmail || !!busy} onClick={onPrepare} title={!contactEmail ? "Set a contact email above first" : ""}>
+        <button className="btn-primary" disabled={!contactEmail || !!busy || !remoteReady} onClick={onPrepare} title={!contactEmail ? "Set a contact email above first" : ""}>
           {busy === `p-${listing.id}`
             ? "Filling form (Solari session)…"
             : isRelisted
@@ -687,7 +727,7 @@ function OptOutRow({
 
       {!isAbsent && sub?.status === "prepared" && (
         <div className="flex gap-2 flex-wrap">
-          <button className="btn-primary" disabled={!!busy} onClick={() => onApprove()}>
+          <button className="btn-primary" disabled={!!busy || !remoteReady} onClick={() => onApprove()}>
             {busy === `a-${listing.id}` ? "Submitting…" : "Approve & submit"}
           </button>
           <button className="btn-secondary" disabled={!!busy} onClick={onCancel}>Cancel</button>
@@ -708,7 +748,7 @@ function OptOutRow({
             </label>
           )}
           {sub.attentionOperation === "submit" && !isAbsent && (
-            <button className="btn-primary" disabled={!!busy || !retryAcknowledged} onClick={() => onApprove(true)}>Retry submission</button>
+            <button className="btn-primary" disabled={!!busy || !retryAcknowledged || !remoteReady} onClick={() => onApprove(true)}>Retry submission</button>
           )}
           <button className="btn-secondary ml-2" disabled={!!busy} onClick={onCancel}>Close attempt locally</button>
         </div>
@@ -727,7 +767,7 @@ function OptOutRow({
               value={confirmUrl}
               onChange={(e) => onConfirmUrlChange(e.target.value)}
             />
-            <button className="btn-primary" disabled={!confirmUrl || !!busy || (sub.status === "attention_required" && !retryAcknowledged)} onClick={() => onConfirmEmail(sub.status === "attention_required" && retryAcknowledged)}>
+            <button className="btn-primary" disabled={!confirmUrl || !!busy || !remoteReady || (sub.status === "attention_required" && !retryAcknowledged)} onClick={() => onConfirmEmail(sub.status === "attention_required" && retryAcknowledged)}>
               {busy === `e-${listing.id}` ? "Confirming…" : "Confirm removal"}
             </button>
           </div>
