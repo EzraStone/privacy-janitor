@@ -345,13 +345,13 @@ export async function waitForAny(
 }
 
 /** Standardized match scoring shared by adapters. */
+/** Lowercase with diacritics removed: brokers print "Garcia" for "García". */
+function foldName(name: string): string {
+  return name.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
+}
+
 function nameWords(name: string): string[] {
-  return name
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}']+/u)
-    .filter(Boolean)
+  return foldName(name).split(/[^\p{L}\p{N}']+/u).filter(Boolean)
 }
 
 export function scoreMatch(
@@ -406,17 +406,31 @@ export function isPersonProfileSlug(
   slug: string,
   identity: { fullName: string },
 ): boolean {
-  const tokens = slug.toLowerCase().split("-").filter(Boolean)
+  let decoded = slug
+  try {
+    decoded = decodeURIComponent(slug)
+  } catch {
+    /* keep a malformed slug as it is */
+  }
+  const tokens = foldName(decoded).split("-").filter(Boolean)
   const suffixes = new Set(["jr", "sr", "ii", "iii", "iv", "v"])
   while (tokens.length > 2 && suffixes.has(tokens[tokens.length - 1])) tokens.pop()
 
-  const parts = identity.fullName.toLowerCase().split(/\s+/).filter(Boolean)
-  const first = parts[0]
-  const last = parts[parts.length - 1]
+  // Compare letters only. A slug drops accents ("garcia"), apostrophes
+  // ("obrien" or "o-brien") and splits hyphenated surnames ("smith-jones"),
+  // so the surname may span several trailing tokens.
+  const letters = (text: string) => text.replace(/[^\p{L}\p{N}]/gu, "")
+  const parts = foldName(identity.fullName).split(/\s+/).filter(Boolean)
+  const first = letters(parts[0] ?? "")
+  const last = letters(parts[parts.length - 1] ?? "")
   if (!first || !last || tokens.length < 2) return false
 
-  const lastTok = tokens[tokens.length - 1]
-  const firstTok = tokens[0]
-  if (lastTok !== last) return false
+  // At least one leading token must remain for the first name.
+  let surnameFound = false
+  for (let k = 1; k < tokens.length && !surnameFound; k++) {
+    surnameFound = letters(tokens.slice(-k).join("")) === last
+  }
+  if (!surnameFound) return false
+  const firstTok = letters(tokens[0])
   return firstTok.startsWith(first.slice(0, 2)) || first.startsWith(firstTok.slice(0, 2))
 }

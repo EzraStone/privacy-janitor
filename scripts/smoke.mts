@@ -15,6 +15,7 @@ import { createProxySessionId, proxySessionId } from "../src/engine/solari.ts"
 import {
   classifyBrokerScan,
   isNoResultText,
+  isPersonProfileSlug,
   scoreMatch,
 } from "../src/adapters/helpers.ts"
 import { buildRedactionMap, redactText, redactListing } from "../src/scoring/redact.ts"
@@ -93,6 +94,22 @@ check("a fragment of the name earns nothing", nameOnly("Jo", "Jordan Example") =
 check("case and spacing do not block an exact match", nameOnly("  JORDAN   example ", "Jordan Example") === nameOnly("Jordan Example", "Jordan Example"))
 check("accents stripped by a broker still match exactly", nameOnly("Jose Garcia", "José García") === nameOnly("José García", "José García"))
 check("a surname alone keeps partial credit", nameOnly("Example", "Jordan Example") > 0)
+
+console.log("smoke: profile URL slugs")
+// Slugs are ASCII and hyphen-joined, so a surname can lose its accents,
+// apostrophe or own hyphen on the way into the URL — and still be the person.
+const slugMatches = (slug: string, fullName: string) => isPersonProfileSlug(slug, { fullName })
+check("a plain slug matches", slugMatches("Jordan-Example", "Jordan Example"))
+check("a middle initial in the slug matches", slugMatches("Jordan-A-Example", "Jordan Example"))
+check("a generational suffix is ignored", slugMatches("John-Smith-Jr", "John Smith"))
+check("a hyphenated surname matches", slugMatches("Mary-Smith-Jones", "Mary Smith-Jones"))
+check("an apostrophe surname matches without it", slugMatches("Conor-OBrien", "Conor O'Brien"))
+check("an apostrophe surname matches split in two", slugMatches("Conor-O-Brien", "Conor O'Brien"))
+check("an accented name matches its ASCII slug", slugMatches("Jose-Garcia", "José García"))
+check("a percent-encoded slug is decoded", slugMatches("Jos%C3%A9-Garc%C3%ADa", "José García"))
+check("a different surname does not match", !slugMatches("Jordan-Examples", "Jordan Example"))
+check("a different first name does not match", !slugMatches("Pat-Example", "Jordan Example"))
+check("the surname cannot consume the first name", !slugMatches("Smith-Jones", "Mary Smith-Jones"))
 
 console.log("smoke: PII redaction")
 const identity = {
