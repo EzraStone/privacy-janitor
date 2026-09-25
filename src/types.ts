@@ -158,6 +158,19 @@ export interface ScanRun {
  *  logic + Solari pages; the engine owns sessions, evidence, and store. */
 export type MatchConfidence = number // 0..1
 
+/** Which details of a listing agree with the profile. A hint for the person
+ *  reviewing it, never a decision: namesakes can share a name and a city. */
+export interface MatchExplanation {
+  /** Same words; one name covers the other (middle initial, surname only); or neither. */
+  name: "same" | "similar" | "other"
+  /** An address in the profile's city and state, only its state, only elsewhere, or none listed. */
+  place: "city_and_state" | "state" | "elsewhere" | "none_listed"
+  /** Only when both the listing and the profile give an age. */
+  age?: "fits" | "outside"
+  /** Only when both sides list relatives. */
+  relatives?: "shared" | "none_shared"
+}
+
 export interface BrokerAdapter {
   readonly id: string
   readonly name: string

@@ -17,7 +17,9 @@ import {
   isNoResultText,
   ageFrom,
   emailsFrom,
+  explainMatch,
   isPersonProfileSlug,
+  matchScore,
   namesFrom,
   phonesFrom,
   requireProfileName,
@@ -116,6 +118,24 @@ for (const adapter of adapters) {
         scoreMatch(shown, wpPerson.fullName, [address], wpPerson.city, wpPerson.stateCode, {}))
   }
 }
+
+console.log("smoke: match explanations")
+// The review card shows which details agree, so each must be reported
+// accurately — and "unknown" must never read as a mismatch.
+const explained = explainMatch("Jordan Example", "Jordan Example", ["742 Evergreen Terrace, Chicago, IL"], "Chicago", "IL",
+  { age: "42", ageRange: "40-45", relatives: ["Casey Example"], listingRelatives: ["Casey E"] })
+check("every agreeing detail is reported",
+  JSON.stringify(explained) === JSON.stringify({ name: "same", place: "city_and_state", age: "fits", relatives: "shared" }))
+const elsewhere = explainMatch("Jordan A Example", "Jordan Example", ["9 Oak Ave, Austin, TX"], "Chicago", "IL",
+  { age: "61", ageRange: "40-45", relatives: ["Casey Example"], listingRelatives: ["Robin Doe"] })
+check("contradicting details are reported",
+  JSON.stringify(elsewhere) === JSON.stringify({ name: "similar", place: "elsewhere", age: "outside", relatives: "none_shared" }))
+const sparse = explainMatch("Jordan Example", "Jordan Example", [], "Chicago", "IL", { age: "42" })
+check("missing details stay unknown, never a mismatch",
+  sparse.place === "none_listed" && sparse.age === undefined && sparse.relatives === undefined)
+check("the score is derived from the explanation", scoreMatch("Jordan Example", "Jordan Example",
+  ["742 Evergreen Terrace, Chicago, IL"], "Chicago", "IL",
+  { age: "42", ageRange: "40-45", relatives: ["Casey Example"], listingRelatives: ["Casey E"] }) === matchScore(explained))
 
 console.log("smoke: profile URL slugs")
 // Slugs are ASCII and hyphen-joined, so a surname can lose its accents,

@@ -8,6 +8,7 @@ import type {
   BrokerLocator,
   BrokerScanObservation,
   Listing,
+  MatchExplanation,
 } from "@/types"
 
 const CHALLENGE_MARKERS = [
@@ -418,6 +419,60 @@ function nameWords(name: string): string[] {
   return foldName(name).split(/[^\p{L}\p{N}']+/u).filter(Boolean)
 }
 
+/** Which details of a listing agree with the profile; see MatchExplanation. */
+export function explainMatch(
+  displayName: string,
+  identityName: string,
+  addresses: string[],
+  city: string,
+  stateCode: string,
+  extras?: { age?: string; ageRange?: string; relatives?: string[]; listingRelatives?: string[] },
+): MatchExplanation {
+  // Compare names as words, not substrings: a middle initial ("Jordan A
+  // Example") still matches, a fragment ("Jo") does not, and accents a broker
+  // stripped ("Jose" for "José") are folded away on both sides.
+  const shown = nameWords(displayName)
+  const wanted = nameWords(identityName)
+  const covers = (all: string[], some: string[]) => some.length > 0 && some.every((w) => all.includes(w))
+  const name = shown.length > 0 && shown.join(" ") === wanted.join(" ")
+    ? "same"
+    : covers(shown, wanted) || covers(wanted, shown) ? "similar" : "other"
+
+  // A two-letter state code is a word, not a substring: "ma" is inside
+  // "main", "ca" inside "chicago", "il" inside "hill".
+  const state = stateCode.toLowerCase().replace(/[^a-z]/g, "")
+  const inState = (a: string) => state !== "" && new RegExp(`\\b${state}\\b`).test(a.toLowerCase())
+  const cityL = city.toLowerCase()
+  const place = addresses.length === 0
+    ? "none_listed"
+    : addresses.some((a) => a.toLowerCase().includes(cityL) && inState(a))
+      ? "city_and_state"
+      : addresses.some(inState) ? "state" : "elsewhere"
+
+  const explanation: MatchExplanation = { name, place }
+
+  // Unknown stays unknown: an unparseable age or range is not a mismatch.
+  const age = parseInt(extras?.age ?? "", 10)
+  const [lo, hi] = (extras?.ageRange ?? "").split("-").map((x) => parseInt(x, 10))
+  if ([age, lo, hi].every(Number.isFinite)) explanation.age = age >= lo && age <= hi ? "fits" : "outside"
+
+  if (extras?.relatives?.length && extras?.listingRelatives?.length) {
+    const mine = extras.relatives.map((r) => r.toLowerCase().split(" ")[0])
+    const theirs = extras.listingRelatives.map((r) => r.toLowerCase().split(" ")[0])
+    explanation.relatives = mine.some((m) => theirs.includes(m)) ? "shared" : "none_shared"
+  }
+  return explanation
+}
+
+/** The 0..1 score an explanation adds up to. */
+export function matchScore(m: MatchExplanation): number {
+  let score = m.name === "same" ? 0.4 : m.name === "similar" ? 0.25 : 0
+  score += m.place === "city_and_state" ? 0.3 : m.place === "state" ? 0.15 : 0
+  if (m.age === "fits") score += 0.2
+  if (m.relatives === "shared") score += 0.1
+  return Math.min(score, 1)
+}
+
 export function scoreMatch(
   displayName: string,
   identityName: string,
@@ -426,37 +481,7 @@ export function scoreMatch(
   stateCode: string,
   extras?: { age?: string; ageRange?: string; relatives?: string[]; listingRelatives?: string[] },
 ): number {
-  let score = 0
-  // Compare names as words, not substrings: a middle initial ("Jordan A
-  // Example") still matches, a fragment ("Jo") does not, and accents a broker
-  // stripped ("Jose" for "José") are folded away on both sides.
-  const shown = nameWords(displayName)
-  const wanted = nameWords(identityName)
-  const covers = (all: string[], some: string[]) => some.length > 0 && some.every((w) => all.includes(w))
-  if (shown.length > 0 && shown.join(" ") === wanted.join(" ")) score += 0.4
-  else if (covers(shown, wanted) || covers(wanted, shown)) score += 0.25
-
-  // A two-letter state code is a word, not a substring: "ma" is inside
-  // "main", "ca" inside "chicago", "il" inside "hill".
-  const state = stateCode.toLowerCase().replace(/[^a-z]/g, "")
-  const inState = (a: string) => state !== "" && new RegExp(`\\b${state}\\b`).test(a.toLowerCase())
-  const cityL = city.toLowerCase()
-  if (addresses.some((a) => a.toLowerCase().includes(cityL) && inState(a))) score += 0.3
-  else if (addresses.some(inState)) score += 0.15
-
-  if (extras?.age && extras.ageRange) {
-    const age = parseInt(extras.age, 10)
-    const [lo, hi] = extras.ageRange.split("-").map((x) => parseInt(x, 10))
-    if (age >= lo && age <= hi) score += 0.2
-  }
-
-  if (extras?.relatives?.length && extras?.listingRelatives?.length) {
-    const mine = extras.relatives.map((r) => r.toLowerCase().split(" ")[0])
-    const theirs = extras.listingRelatives.map((r) => r.toLowerCase().split(" ")[0])
-    if (mine.some((m) => theirs.includes(m))) score += 0.1
-  }
-
-  return Math.min(score, 1)
+  return matchScore(explainMatch(displayName, identityName, addresses, city, stateCode, extras))
 }
 
 /**
