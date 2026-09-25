@@ -37,7 +37,8 @@ export function SetupPanel({ status, error, checking, onCheck }: {
               <p className="mt-1 text-xs text-zinc-500">Not required for scans or removals</p>
             </div>
           </div>
-          {!status.canStartScan && (
+          {/* Only when the key is the problem: Node and storage show their own fix above. */}
+          {status.solari !== "configured" && (
             <div className="border-l border-white/25 pl-4 text-sm leading-6 text-zinc-300">
               Copy <code>.env.example</code> to <code>.env</code> in the project folder,
               add your <code>SOLARI_API_KEY</code>, then restart the app. Keep keys in that
