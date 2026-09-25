@@ -29,6 +29,7 @@ import {
   ageFrom,
   scoreMatch,
   isPersonProfileSlug,
+  namesFrom,
 } from "./helpers.ts"
 
 const OPTOUT_URL = "https://www.spokeo.com/optout"
@@ -126,11 +127,11 @@ export const spokeo: BrokerAdapter = {
             ".phone",
           ]),
           age: ageFrom(await tryAllTexts(page, ['[data-testid="age"]', ".age", 'span[class*="age"]'])),
-          relatives: await tryAllTexts(page, [
+          relatives: namesFrom(await tryAllTexts(page, [
             'a[href*="-F"]',
             '[data-testid="relative"]',
             ".relative",
-          ]),
+          ])),
           emails: await tryAllTexts(page, ['[data-testid="email"]', 'a[href^="mailto:"]']),
         }
 

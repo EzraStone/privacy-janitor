@@ -288,6 +288,16 @@ export function ageFrom(texts: string[]): string | undefined {
   return undefined
 }
 
+/**
+ * Names as short, single-line text. ".relative" is also a common CSS utility
+ * class, so a relatives selector can catch whole layout blocks of the page.
+ */
+export function namesFrom(texts: string[]): string[] {
+  return texts
+    .map((text) => text.trim())
+    .filter((text) => text.length <= 60 && !/[\r\n]/.test(text) && /\p{L}/u.test(text))
+}
+
 /** Inner text of the first visible match, or undefined. */
 export async function tryInnerText(
   page: BrokerPage,

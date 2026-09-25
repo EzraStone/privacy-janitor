@@ -17,6 +17,7 @@ import {
   isNoResultText,
   ageFrom,
   isPersonProfileSlug,
+  namesFrom,
   requireProfileName,
   scoreMatch,
 } from "../src/adapters/helpers.ts"
@@ -138,6 +139,15 @@ check("a result count is not an age", ageFrom(["Showing 25 results"]) === undefi
 check("pagination is not an age", ageFrom(["Page 25"]) === undefined)
 check("a whole page section is not an age",
   ageFrom(["Jordan Example\nAge 42\n742 Evergreen Terrace, Chicago, IL"]) === undefined)
+
+console.log("smoke: scraped relatives are sanity-checked")
+// ".relative" is also a common CSS utility class, so a relatives selector can
+// catch whole layout blocks. A relative is a short, single-line name.
+check("names are kept and trimmed",
+  JSON.stringify(namesFrom(["Casey Example", " Lane Example "])) === JSON.stringify(["Casey Example", "Lane Example"]))
+check("a layout block is dropped", namesFrom(["Jordan Example\nAge 42\n742 Evergreen Terrace"]).length === 0)
+check("an overlong line is dropped", namesFrom(["Relatives " + "and associates ".repeat(5)]).length === 0)
+check("text without letters is dropped", namesFrom(["123", "—"]).length === 0)
 
 console.log("smoke: PII redaction")
 const identity = {
