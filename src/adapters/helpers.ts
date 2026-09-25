@@ -272,18 +272,20 @@ export async function requireBrokerReceipt(page: BrokerPage, stage: "submit" | "
   throw new Error("No recognized broker receipt was found. The action may have completed; review before retrying.")
 }
 
-const AGE_TEXT = /^(?:age:?\s*)?(\d{1,3})s?(?:\s*(?:years?(?:\s*old)?|yrs?\.?))?$/i
+const AGE_TEXT = /^(?:age:?\s*)?(\d{1,3})(s?)(?:\s*(?:years?(?:\s*old)?|yrs?\.?))?$/i
 
 /**
  * The first text shaped like an adult age ("42", "Age: 42", "Age 40s",
- * "42 years old"), or undefined. Loose age selectors also match page wrappers
- * and pagination, and "Showing 25 results" merely contains a plausible number.
+ * "42 years old"), as just the number ("42", or "40s" for a decade), or
+ * undefined. Loose age selectors also match page wrappers and pagination, and
+ * "Showing 25 results" merely contains a plausible number. Dropping the label
+ * keeps the card from reading "age Age: 42" and lets match scoring parse it.
  */
 export function ageFrom(texts: string[]): string | undefined {
   for (const text of texts) {
-    const normalized = text.replace(/\s+/g, " ").trim()
-    const years = Number(normalized.match(AGE_TEXT)?.[1])
-    if (years >= 18 && years <= 119) return normalized
+    const match = text.replace(/\s+/g, " ").trim().match(AGE_TEXT)
+    const years = Number(match?.[1])
+    if (years >= 18 && years <= 119) return `${years}${match![2].toLowerCase()}`
   }
   return undefined
 }

@@ -134,9 +134,14 @@ console.log("smoke: scraped ages are sanity-checked")
 // Loose age selectors also match page wrappers and pagination, and an age
 // card that reads "Page 1 of 3" misleads the "Is this you?" decision.
 check("a bare age is kept", ageFrom(["42"]) === "42")
-check("a labelled age is kept", ageFrom(["Age: 42"]) === "Age: 42")
-check("a decade age is kept", ageFrom(["Age 40s"]) === "Age 40s")
-check("the first real age wins", ageFrom(["Page 1 of 3", "42 years old"]) === "42 years old")
+check("a labelled age keeps just its number", ageFrom(["Age: 42"]) === "42")
+check("a decade age keeps its decade", ageFrom(["Age 40s"]) === "40s")
+check("the first real age wins", ageFrom(["Page 1 of 3", "42 years old"]) === "42")
+// Normalized so the card reads "age 42", not "age Age: 42", and so match
+// scoring can parse it.
+check("a normalized age parses for match scoring",
+  scoreMatch("Pat Doe", "Pat Doe", [], "Chicago", "IL", { age: ageFrom(["Age: 42"]), ageRange: "40-45" }) >
+  scoreMatch("Pat Doe", "Pat Doe", [], "Chicago", "IL"))
 check("a result count is not an age", ageFrom(["Showing 25 results"]) === undefined)
 check("pagination is not an age", ageFrom(["Page 25"]) === undefined)
 check("a whole page section is not an age",
