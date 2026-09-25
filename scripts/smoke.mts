@@ -18,6 +18,7 @@ import {
   ageFrom,
   isPersonProfileSlug,
   namesFrom,
+  phonesFrom,
   requireProfileName,
   scoreMatch,
 } from "../src/adapters/helpers.ts"
@@ -148,6 +149,16 @@ check("names are kept and trimmed",
 check("a layout block is dropped", namesFrom(["Jordan Example\nAge 42\n742 Evergreen Terrace"]).length === 0)
 check("an overlong line is dropped", namesFrom(["Relatives " + "and associates ".repeat(5)]).length === 0)
 check("text without letters is dropped", namesFrom(["123", "—"]).length === 0)
+
+console.log("smoke: scraped phones are sanity-checked")
+// A phone selector can match the container that holds several numbers; split
+// it into the numbers rather than keeping one blob or dropping it.
+const same = (a: string[], b: string[]) => JSON.stringify(a) === JSON.stringify(b)
+check("a phone is kept", same(phonesFrom(["(312) 555-0100"]), ["(312) 555-0100"]))
+check("a container is split into its phones",
+  same(phonesFrom(["Phone numbers\n(312) 555-0100\n312.555.0199\nShow more"]), ["(312) 555-0100", "312.555.0199"]))
+check("repeated numbers collapse", same(phonesFrom(["(312) 555-0100", "312-555-0100"]), ["(312) 555-0100"]))
+check("years and ZIP codes are not phones", phonesFrom(["2024", "62704"]).length === 0)
 
 console.log("smoke: PII redaction")
 const identity = {

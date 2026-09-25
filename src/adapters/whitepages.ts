@@ -35,6 +35,7 @@ import {
   scoreMatch,
   isPersonProfileSlug,
   namesFrom,
+  phonesFrom,
 } from "./helpers.ts"
 
 const SUPPRESSION_URL = "https://www.whitepages.com/suppression_requests"
@@ -122,11 +123,11 @@ export const whitepages: BrokerAdapter = {
             ".address",
             'div[class*="address"]',
           ]),
-          phones: await tryAllTexts(page, [
+          phones: phonesFrom(await tryAllTexts(page, [
             '[data-testid="phone"]',
             ".phone",
             'a[href^="tel:"]',
-          ]),
+          ])),
           age: ageFrom(await tryAllTexts(page, ['[data-testid="age"]', ".age", 'span[class*="age"]'])),
           relatives: namesFrom(await tryAllTexts(page, [
             '[data-testid="relative"]',

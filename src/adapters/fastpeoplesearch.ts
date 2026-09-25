@@ -31,6 +31,7 @@ import {
   scoreMatch,
   isPersonProfileSlug,
   namesFrom,
+  phonesFrom,
 } from "./helpers.ts"
 
 const REMOVAL_URL = "https://www.fastpeoplesearch.com/removal"
@@ -136,11 +137,11 @@ export const fastpeoplesearch: BrokerAdapter = {
             'a[href*="/address/"]',
             'div[class*="adr"]',
           ]),
-          phones: await tryAllTexts(page, [
+          phones: phonesFrom(await tryAllTexts(page, [
             'a[href*="/phone/"]',
             'a[href^="tel:"]',
             '[class*="phone" i]',
-          ]),
+          ])),
           age: ageFrom(await tryAllTexts(page, ['[class*="age" i]', 'span:has-text("Age")'])),
           relatives: namesFrom(await tryAllTexts(page, [
             'a[href*="/name/"]',

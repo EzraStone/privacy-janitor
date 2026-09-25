@@ -298,6 +298,25 @@ export function namesFrom(texts: string[]): string[] {
     .filter((text) => text.length <= 60 && !/[\r\n]/.test(text) && /\p{L}/u.test(text))
 }
 
+/**
+ * Phone numbers, one per line of text. A phone selector can match the
+ * container holding several numbers, so split it instead of keeping one blob;
+ * the same number printed twice ("312.555.0100", "+1 312-555-0100") collapses.
+ */
+export function phonesFrom(texts: string[]): string[] {
+  const seen = new Set<string>()
+  const phones: string[] = []
+  for (const line of texts.flatMap((text) => text.split(/[\r\n]+/))) {
+    const candidate = line.trim()
+    const digits = candidate.replace(/\D/g, "")
+    const key = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits
+    if (candidate.length > 30 || digits.length < 10 || digits.length > 15 || seen.has(key)) continue
+    seen.add(key)
+    phones.push(candidate)
+  }
+  return phones
+}
+
 /** Inner text of the first visible match, or undefined. */
 export async function tryInnerText(
   page: BrokerPage,
