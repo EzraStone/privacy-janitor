@@ -255,6 +255,30 @@ let unparseableRejected = false
 try { parseExposureReport("not json at all", [], "test-model") } catch { unparseableRejected = true }
 check("unparseable model output is rejected", unparseableRejected)
 
+// The model's reply is untrusted: indices can repeat or point past the list,
+// and scores can be missing or non-numeric.
+const pair: Listing[] = [
+  { ...typedListing, id: "lst_a", brokerId: "spokeo" },
+  { ...typedListing, id: "lst_b", brokerId: "whitepages" },
+]
+const rank = (rankings: unknown[]) => JSON.stringify({ rankings, summary: "s" })
+const noisy = parseExposureReport(rank([
+  { listing_index: 0, score: 80, rationale: "a", recommended_action: "x" },
+  { listing_index: 0, score: 10, rationale: "repeat", recommended_action: "x" },
+  { listing_index: 5, score: 99, rationale: "past the end", recommended_action: "x" },
+  { listing_index: -1, score: 99, rationale: "negative", recommended_action: "x" },
+  { listing_index: 1, score: "high", rationale: "not a number", recommended_action: "x" },
+]), pair, "test-model")
+check("out-of-range, repeated and unscored rankings are dropped",
+  noisy.rankings.length === 1 && noisy.rankings[0].listingId === "lst_a")
+check("the first ranking for a listing wins", noisy.rankings[0].score === 80)
+check("total score stays a number", noisy.totalScore === 80)
+check("numeric-string scores are accepted",
+  parseExposureReport(rank([{ listing_index: 1, score: "42", rationale: "", recommended_action: "" }]), pair, "m").totalScore === 42)
+let emptyRejected = false
+try { parseExposureReport(rank([]), pair, "test-model") } catch { emptyRejected = true }
+check("no usable rankings is an error, not a reassuring 0/100", emptyRejected)
+
 console.log("")
 if (failures > 0) {
   console.error(`${failures} check(s) FAILED`)

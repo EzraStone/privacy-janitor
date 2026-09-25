@@ -98,15 +98,29 @@ export function parseExposureReport(raw: string, listings: Listing[], model: str
   const parsed = safeParseJson(raw)
   if (!parsed) throw new Error("Exposure scoring: model returned unparseable JSON")
 
-  const rankings: ListingRisk[] = (parsed.rankings ?? [])
-    .filter((r: RawRanking) => Number.isInteger(r.listing_index))
-    .map((r: RawRanking) => ({
-      listingId: listings[r.listing_index]?.id ?? "unknown",
-      brokerId: listings[r.listing_index]?.brokerId ?? "unknown",
-      score: Math.max(0, Math.min(100, Math.round(r.score))),
+  // The reply is untrusted: indices can repeat or point past the list, and
+  // scores can be missing or non-numeric. Unchecked, those surface as
+  // "unknown" listings, double-count in the average, or turn it into NaN.
+  const seen = new Set<number>()
+  const rankings: ListingRisk[] = []
+  for (const r of Array.isArray(parsed.rankings) ? parsed.rankings : []) {
+    const index = r?.listing_index
+    const score = finiteScore(r?.score)
+    if (!Number.isInteger(index) || index < 0 || index >= listings.length || seen.has(index)) continue
+    if (score === undefined) continue
+    seen.add(index)
+    rankings.push({
+      listingId: listings[index].id,
+      brokerId: listings[index].brokerId,
+      score: Math.max(0, Math.min(100, Math.round(score))),
       rationale: String(r.rationale ?? "").slice(0, 500),
       recommendedAction: String(r.recommended_action ?? "").slice(0, 300),
-    }))
+    })
+  }
+  // With nothing usable, the average would read 0/100: "no exposure".
+  if (listings.length > 0 && rankings.length === 0) {
+    throw new Error("Exposure scoring: model returned no usable rankings")
+  }
 
   const totalScore = rankings.length
     ? Math.round(rankings.reduce((s, r) => s + r.score, 0) / rankings.length)
@@ -119,6 +133,14 @@ export function parseExposureReport(raw: string, listings: Listing[], model: str
     generatedAt: new Date().toISOString(),
     model,
   }
+}
+
+/** A number, or a string that is exactly one. Never coerces null or "" to 0. */
+function finiteScore(value: unknown): number | undefined {
+  const n = typeof value === "number"
+    ? value
+    : typeof value === "string" && /^\s*-?\d+(\.\d+)?\s*$/.test(value) ? Number(value) : NaN
+  return Number.isFinite(n) ? n : undefined
 }
 
 function safeParseJson(text: string): { rankings?: RawRanking[]; summary?: string } | null {
