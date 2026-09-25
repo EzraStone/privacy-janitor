@@ -1097,7 +1097,8 @@ export function reopenIgnoredRemoval(listingId: string, submissionId: string): S
 export function cancelSubmission(listingId: string, submissionId: string): Submission {
   const sub = requireCurrentSubmission(listingId, submissionId)
   if (sub.status === "cancelled") return sub
-  if (!["prepared", "approved", "attention_required"].includes(sub.status)) {
+  // awaiting_email has nothing in flight: the broker is waiting on the user.
+  if (!["prepared", "approved", "attention_required", "awaiting_email"].includes(sub.status)) {
     throw new Error("this attempt cannot be cancelled while a broker action is in flight or completed")
   }
   transitionSubmission(sub.id, sub.status, "cancelled", {}, true)

@@ -215,6 +215,19 @@ try {
   assert.notEqual(retry.id, ignored.id, "a fresh attempt can be prepared")
   store.cancelSubmission("ignored", retry.id)
   console.log("ok: a removal the broker ignored can be requested again after a rescan")
+
+  // A confirmation email can go to spam, expire, or never arrive; without the
+  // link, an attempt waiting on it must still be closable.
+  listing("no-email")
+  const noEmail = await service.prepare("no-email", "jordan@example.com")
+  service.approve("no-email", noEmail.id)
+  await service.waitForIdle()
+  assert.equal(store.getSubmission(noEmail.id)?.status, "awaiting_email")
+  assert.equal(store.cancelSubmission("no-email", noEmail.id).status, "cancelled")
+  const afresh = await service.prepare("no-email", "jordan@example.com")
+  assert.notEqual(afresh.id, noEmail.id, "a fresh attempt can be prepared")
+  store.cancelSubmission("no-email", afresh.id)
+  console.log("ok: an attempt waiting on an email that never came can be closed")
 } finally {
   await service.waitForIdle()
   store.closeDb()

@@ -11,7 +11,8 @@ const transitions: Record<SubmissionStatus, SubmissionStatus[]> = {
   submitting: ["awaiting_email", "submitted", "attention_required"],
   // A sent request the broker ignored may be closed so a new one can be made.
   submitted: ["removed", "failed"],
-  awaiting_email: ["confirming"],
+  // Without the emailed link (spam, expiry, never sent) the attempt can close.
+  awaiting_email: ["confirming", "cancelled"],
   confirming: ["confirmed", "attention_required"],
   confirmed: ["removed", "failed"],
   attention_required: ["approved", "confirming", "cancelled"],
