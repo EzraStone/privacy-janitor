@@ -76,6 +76,15 @@ const namesake = scoreMatch("John Smith", "John Smith", ["456 Oak Ave, Austin, T
 check("same-city match scores >0.6", exact > 0.6)
 check("wrong-city namesake scores <0.5", namesake < 0.5)
 check("scoring bounded to 1", exact <= 1 && namesake >= 0)
+// Two-letter state codes are words, not substrings: "MA" is inside "Main",
+// "CA" inside "Chicago", "IL" inside "Hill".
+const stateOnly = (address: string, city: string, state: string) =>
+  scoreMatch("Pat Doe", "Pat Doe", [address], city, state) - scoreMatch("Pat Doe", "Pat Doe", [], city, state)
+check("MA is not matched inside Main St", stateOnly("12 Main St, Austin, TX", "Boston", "MA") === 0)
+check("CA is not matched inside Chicago", stateOnly("9 Oak Ave, Chicago, IL", "Fresno", "CA") === 0)
+check("a Springfield MA namesake on Hill St is not a Springfield IL match",
+  stateOnly("4 Hill St, Springfield, MA", "Springfield", "IL") === 0)
+check("a same-state address still earns state credit", stateOnly("7 Elm St, Peoria, IL 61602", "Chicago", "IL") > 0)
 
 console.log("smoke: PII redaction")
 const identity = {

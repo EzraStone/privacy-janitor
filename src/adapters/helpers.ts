@@ -359,11 +359,13 @@ export function scoreMatch(
   if (name === wanted) score += 0.4
   else if (name.includes(wanted) || wanted.includes(name)) score += 0.25
 
-  const state = stateCode.toLowerCase()
+  // A two-letter state code is a word, not a substring: "ma" is inside
+  // "main", "ca" inside "chicago", "il" inside "hill".
+  const state = stateCode.toLowerCase().replace(/[^a-z]/g, "")
+  const inState = (a: string) => state !== "" && new RegExp(`\\b${state}\\b`).test(a.toLowerCase())
   const cityL = city.toLowerCase()
-  if (addresses.some((a) => a.toLowerCase().includes(cityL) && a.toLowerCase().includes(state)))
-    score += 0.3
-  else if (addresses.some((a) => a.toLowerCase().includes(state))) score += 0.15
+  if (addresses.some((a) => a.toLowerCase().includes(cityL) && inState(a))) score += 0.3
+  else if (addresses.some(inState)) score += 0.15
 
   if (extras?.age && extras.ageRange) {
     const age = parseInt(extras.age, 10)
