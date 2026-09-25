@@ -8,6 +8,7 @@
  */
 import "dotenv/config"
 import { getSolariClient } from "../src/engine/solari.ts"
+import { getEvidenceDir } from "../src/config/paths.ts"
 import { writeFileSync, mkdirSync } from "node:fs"
 import { join } from "node:path"
 
@@ -49,10 +50,10 @@ try {
   } else {
     console.log("url field NOT visible — dumping page state")
     const png = await page.screenshot({ fullPage: false })
-    const dir = join(process.cwd(), "data", "evidence", "optout-prep")
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, "spokeo-optout.png"), png)
-    console.log("screenshot saved to data/evidence/optout-prep/spokeo-optout.png")
+    const dir = join(getEvidenceDir(), "optout-prep")
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
+    writeFileSync(join(dir, "spokeo-optout.png"), png, { mode: 0o600 })
+    console.log(`screenshot saved to ${join(dir, "spokeo-optout.png")}`)
   }
 
   const emailField = page.locator('input[name="email"], input[type="email"]').first()
@@ -63,9 +64,9 @@ try {
   }
 
   const png = await page.screenshot({ fullPage: false })
-  const dir = join(process.cwd(), "data", "evidence", "optout-prep")
-  mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, "filled.png"), png)
+  const dir = join(getEvidenceDir(), "optout-prep")
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
+  writeFileSync(join(dir, "filled.png"), png, { mode: 0o600 })
   console.log("filled-form screenshot saved — NO submit performed")
 } finally {
   await browser.close()

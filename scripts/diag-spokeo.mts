@@ -1,6 +1,7 @@
 /** Spokeo results-page diagnosis: what appears after submitting the hero form? */
 import "dotenv/config"
 import { getSolariClient } from "../src/engine/solari.ts"
+import { getEvidenceDir } from "../src/config/paths.ts"
 import { writeFileSync, mkdirSync } from "node:fs"
 import { join } from "node:path"
 
@@ -43,9 +44,9 @@ try {
   for (const h of hrefs) console.log("  ", h)
 
   const png = await page.screenshot({ fullPage: false })
-  const dir = join(process.cwd(), "data", "evidence", "spokeo-diag")
-  mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, "results.png"), png)
+  const dir = join(getEvidenceDir(), "spokeo-diag")
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
+  writeFileSync(join(dir, "results.png"), png, { mode: 0o600 })
   console.log("screenshot saved")
 } finally {
   await browser.close()

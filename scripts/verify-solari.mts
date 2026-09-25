@@ -10,6 +10,7 @@
  */
 import "dotenv/config"
 import { getSolariClient } from "../src/engine/solari.ts"
+import { getEvidenceDir } from "../src/config/paths.ts"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
@@ -44,10 +45,10 @@ async function main() {
 
     // 3. Evidence: screenshot of the loaded homepage.
     const png = await page.screenshot({ fullPage: false })
-    const outDir = join(process.cwd(), "data", "evidence", "verify-solari")
-    mkdirSync(outDir, { recursive: true })
+    const outDir = join(getEvidenceDir(), "verify-solari")
+    mkdirSync(outDir, { recursive: true, mode: 0o700 })
     const outPath = join(outDir, "whitepages-home.png")
-    writeFileSync(outPath, png)
+    writeFileSync(outPath, png, { mode: 0o600 })
     console.log("screenshot saved:", outPath)
 
     // 4. Check the search box is reachable (first selector layer of our adapter).

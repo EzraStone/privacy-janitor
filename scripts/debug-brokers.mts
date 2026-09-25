@@ -1,11 +1,12 @@
 /** Debug broker search pages: dump screenshots, inputs, and link shapes. */
 import "dotenv/config"
 import { getSolariClient } from "../src/engine/solari.ts"
+import { getEvidenceDir } from "../src/config/paths.ts"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
-const outDir = join(process.cwd(), "data", "evidence", "broker-debug")
-mkdirSync(outDir, { recursive: true })
+const outDir = join(getEvidenceDir(), "broker-debug")
+mkdirSync(outDir, { recursive: true, mode: 0o700 })
 
 const client = getSolariClient()
 
@@ -24,7 +25,7 @@ async function dump(label: string, url: string) {
 
     // save screenshot
     const png = await page.screenshot({ fullPage: false })
-    writeFileSync(join(outDir, `${label}.png`), png)
+    writeFileSync(join(outDir, `${label}.png`), png, { mode: 0o600 })
 
     // dump all input fields
     const inputs = await page
