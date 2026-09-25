@@ -1,5 +1,6 @@
 /** Synthetic selector fixtures driving the real adapters. No browser, credentials, or network. */
 import assert from "node:assert/strict"
+import { explainListing } from "../src/adapters/helpers.ts"
 import { adapters } from "../src/adapters/registry.ts"
 import type { BrokerPage, BrokerLocator, Identity, Listing, PreparedOptOut } from "../src/types.ts"
 
@@ -44,6 +45,24 @@ function fixturePage(search: Fixture, profile: Fixture = {}): BrokerPage & { cli
   }
 }
 
+// Each adapter's first selector per profile field, and a later fallback.
+const extraction: Record<string, {
+  address: string; phone: [string, string]; age: [string, string]; relative: [string, string]; email?: string
+}> = {
+  whitepages: {
+    address: '[data-testid="address"]', phone: ['[data-testid="phone"]', 'a[href^="tel:"]'],
+    age: ['[data-testid="age"]', ".age"], relative: ['[data-testid="relative"]', ".relative"],
+  },
+  spokeo: {
+    address: '[data-testid="address"]', phone: ['[data-testid="phone"]', ".phone"],
+    age: ['[data-testid="age"]', ".age"], relative: ['a[href*="-F"]', '[data-testid="relative"]'], email: '[data-testid="email"]',
+  },
+  fastpeoplesearch: {
+    address: '[class*="address" i]', phone: ['a[href*="/phone/"]', 'a[href^="tel:"]'],
+    age: ['[class*="age" i]', 'span:has-text("Age")'], relative: ['a[href*="/name/"]', '[class*="relative" i]'],
+  },
+}
+
 let cases = 0
 for (const adapter of adapters) {
   const profileUrl = adapter.id === "whitepages" ? "/name/Jordan-Example/Chicago-IL/fixture"
@@ -76,6 +95,45 @@ for (const adapter of adapters) {
     assert.equal(result.searchScreenshot?.toString(), "synthetic search", "search evidence captured before profile navigation")
     cases++
   }
+
+  // What a verified profile exposes, read through the adapter's own selectors.
+  const fields = extraction[adapter.id]
+  async function scanProfile(profile: Fixture): Promise<Listing> {
+    const result = await adapter.scan(fixturePage({ ...base, [anchor]: [{ href: profileUrl }] },
+      { h1: [{ text: person.fullName }], body: [{ text: person.fullName }], ...profile }), person)
+    assert.equal(result.listings.length, 1, `${adapter.id}: one verified profile`)
+    return result.listings[0]
+  }
+  const address = "742 Evergreen Terrace, Chicago, IL 60601"
+  const direct = await scanProfile({
+    [fields.address]: [{ text: address }],
+    [fields.phone[0]]: [{ text: "(312) 555-0142" }, { text: "312-555-0142" }],
+    [fields.age[0]]: [{ text: "Age 42" }],
+    [fields.relative[0]]: [{ text: "Casey Example" }, { text: "Relatives, associates and neighbors of Jordan Example in Chicago, Illinois" }],
+    ...(fields.email ? { [fields.email]: [{ text: "jordan@example.com" }, { text: "privacy@spokeo.com" }] } : {}),
+  })
+  assert.deepEqual(direct.exposedData, {
+    addresses: [address], phones: ["(312) 555-0142"], age: "42", relatives: ["Casey Example"],
+    ...(fields.email ? { emails: ["jordan@example.com"] } : {}),
+  }, `${adapter.id}: profile details are extracted and normalized`)
+  assert.deepEqual(explainListing(direct, { ...person, ageRange: "40-45", relatives: ["Casey Example"] }),
+    { name: "same", place: "city_and_state", age: "fits", relatives: "shared" }, `${adapter.id}: extracted details feed the match hint`)
+  // Loose fallbacks such as [class*="age"] also match "page" and "image":
+  // junk under one selector must not hide real data under the next.
+  const chrome: Fixture = {
+    [fields.phone[0]]: [{ text: "Reverse phone lookup" }],
+    [fields.age[0]]: [{ text: "Page 1 of 3" }],
+    [fields.relative[0]]: [{ text: "Jordan Example\nAge 42\n742 Evergreen Terrace" }],
+  }
+  const fallback = await scanProfile({
+    ...chrome,
+    [fields.phone[1]]: [{ text: "(312) 555-0142" }], [fields.age[1]]: [{ text: "Age 42" }], [fields.relative[1]]: [{ text: "Casey Example" }],
+  })
+  assert.deepEqual(fallback.exposedData, { phones: ["(312) 555-0142"], age: "42", relatives: ["Casey Example"] },
+    `${adapter.id}: junk under one selector does not hide the next`)
+  assert.deepEqual((await scanProfile(chrome)).exposedData, {}, `${adapter.id}: page chrome is not personal data`)
+  cases += 3
+
   const submit = 'button:has-text("Submit")'
   const status = '[role="status"]'
   const listing: Listing = {

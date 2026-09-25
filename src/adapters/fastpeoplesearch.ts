@@ -27,7 +27,7 @@ import {
   inspectBrokerSearchPage,
   tryAllTexts,
   tryInnerText,
-  ageFrom,
+  agesFrom,
   explainListing,
   isPersonProfileSlug,
   namesFrom,
@@ -137,21 +137,21 @@ export const fastpeoplesearch: BrokerAdapter = {
             'a[href*="/address/"]',
             'div[class*="adr"]',
           ]),
-          phones: phonesFrom(await tryAllTexts(page, [
+          phones: await tryAllTexts(page, [
             'a[href*="/phone/"]',
             'a[href^="tel:"]',
             '[class*="phone" i]',
-          ])),
-          age: ageFrom(await tryAllTexts(page, ['[class*="age" i]', 'span:has-text("Age")'])),
-          relatives: namesFrom(await tryAllTexts(page, [
+          ], phonesFrom),
+          age: (await tryAllTexts(page, ['[class*="age" i]', 'span:has-text("Age")'], agesFrom))[0],
+          relatives: await tryAllTexts(page, [
             'a[href*="/name/"]',
             '[class*="relative" i]',
-          ])),
+          ], namesFrom),
         }
 
         for (const k of Object.keys(exposedData) as Array<keyof typeof exposedData>) {
           const v = exposedData[k]
-          if (Array.isArray(v) && v.length === 0) delete exposedData[k]
+          if (v === undefined || (Array.isArray(v) && v.length === 0)) delete exposedData[k]
         }
 
         listings.push({

@@ -26,7 +26,7 @@ import {
   inspectBrokerSearchPage,
   tryAllTexts,
   tryInnerText,
-  ageFrom,
+  agesFrom,
   emailsFrom,
   explainListing,
   isPersonProfileSlug,
@@ -123,23 +123,23 @@ export const spokeo: BrokerAdapter = {
             'a[href*="address"]',
             ".address",
           ]),
-          phones: phonesFrom(await tryAllTexts(page, [
+          phones: await tryAllTexts(page, [
             '[data-testid="phone"]',
             'a[href^="tel:"]',
             ".phone",
-          ])),
-          age: ageFrom(await tryAllTexts(page, ['[data-testid="age"]', ".age", 'span[class*="age"]'])),
-          relatives: namesFrom(await tryAllTexts(page, [
+          ], phonesFrom),
+          age: (await tryAllTexts(page, ['[data-testid="age"]', ".age", 'span[class*="age"]'], agesFrom))[0],
+          relatives: await tryAllTexts(page, [
             'a[href*="-F"]',
             '[data-testid="relative"]',
             ".relative",
-          ])),
-          emails: emailsFrom(await tryAllTexts(page, ['[data-testid="email"]', 'a[href^="mailto:"]']), "spokeo.com"),
+          ], namesFrom),
+          emails: await tryAllTexts(page, ['[data-testid="email"]', 'a[href^="mailto:"]'], (texts) => emailsFrom(texts, "spokeo.com")),
         }
 
         for (const k of Object.keys(exposedData) as Array<keyof typeof exposedData>) {
           const v = exposedData[k]
-          if (Array.isArray(v) && v.length === 0) delete exposedData[k]
+          if (v === undefined || (Array.isArray(v) && v.length === 0)) delete exposedData[k]
         }
 
         listings.push({

@@ -31,7 +31,7 @@ import {
   inspectBrokerSearchPage,
   tryAllTexts,
   tryInnerText,
-  ageFrom,
+  agesFrom,
   explainListing,
   isPersonProfileSlug,
   namesFrom,
@@ -123,24 +123,24 @@ export const whitepages: BrokerAdapter = {
             ".address",
             'div[class*="address"]',
           ]),
-          phones: phonesFrom(await tryAllTexts(page, [
+          phones: await tryAllTexts(page, [
             '[data-testid="phone"]',
             ".phone",
             'a[href^="tel:"]',
-          ])),
-          age: ageFrom(await tryAllTexts(page, ['[data-testid="age"]', ".age", 'span[class*="age"]'])),
-          relatives: namesFrom(await tryAllTexts(page, [
+          ], phonesFrom),
+          age: (await tryAllTexts(page, ['[data-testid="age"]', ".age", 'span[class*="age"]'], agesFrom))[0],
+          relatives: await tryAllTexts(page, [
             '[data-testid="relative"]',
             'a[href*="/relative/"]',
             ".relative",
-          ])),
-          aliases: namesFrom(await tryAllTexts(page, ['[data-testid="alias"]', ".alias"])),
+          ], namesFrom),
+          aliases: await tryAllTexts(page, ['[data-testid="alias"]', ".alias"], namesFrom),
         }
 
         // Prune empties so the UI shows only what's really exposed.
         for (const k of Object.keys(exposedData) as Array<keyof typeof exposedData>) {
           const v = exposedData[k]
-          if (Array.isArray(v) && v.length === 0) delete exposedData[k]
+          if (v === undefined || (Array.isArray(v) && v.length === 0)) delete exposedData[k]
         }
 
         listings.push({

@@ -116,8 +116,8 @@ it does not silently open a second, less capable session.
 | FastPeopleSearch | Search, subject-request preview, submit, email confirmation | Offline behavior fixtures |
 
 **These are implemented adapters, not a guarantee that current live flows work.**
-The 87 synthetic adapter checks exercise known success, challenge, empty-result, profile-failure,
-and uncertain-action states without contacting brokers. They cannot detect changes to live
+The 96 synthetic adapter checks exercise known success, challenge, empty-result, profile-failure,
+profile-extraction and uncertain-action states without contacting brokers. They cannot detect changes to live
 websites. A consent-based live beta is still needed after these reliability changes.
 
 The demo assets illustrate the interface with fictional data, not proof of successful removal.

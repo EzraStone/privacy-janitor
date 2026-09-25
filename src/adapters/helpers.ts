@@ -292,6 +292,12 @@ export function ageFrom(texts: string[]): string | undefined {
   return undefined
 }
 
+/** ageFrom as a list for tryAllTexts: empty when no text is an age. */
+export function agesFrom(texts: string[]): string[] {
+  const age = ageFrom(texts)
+  return age ? [age] : []
+}
+
 /**
  * Names as short, single-line text. ".relative" is also a common CSS utility
  * class, so a relatives selector can catch whole layout blocks of the page.
@@ -351,17 +357,23 @@ export async function tryInnerText(
   return undefined
 }
 
-/** All inner texts (capped) across the first selector that matches. */
+/**
+ * Parsed inner texts (capped) of the first selector whose texts survive
+ * `parse`. Each selector is parsed before falling back: a loose selector like
+ * [class*="age"] also matches "page" and "image", and its junk must not hide
+ * real data under the next selector.
+ */
 export async function tryAllTexts(
   page: BrokerPage,
   selectors: string[],
+  parse: (texts: string[]) => string[] = (texts) => texts,
 ): Promise<string[]> {
   for (const sel of selectors) {
     try {
       const loc = page.locator(sel)
       if ((await loc.count()) > 0) {
         const texts = await loc.allInnerTexts()
-        const clean = texts.map((t) => t.trim()).filter(Boolean)
+        const clean = parse(texts.map((t) => t.trim()).filter(Boolean))
         if (clean.length) return clean.slice(0, 10)
       }
     } catch {
