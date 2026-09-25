@@ -17,7 +17,7 @@
     "smoke:adapters": "node --experimental-strip-types scripts/smoke-adapters.mts",
     "smoke:privacy": "node --experimental-strip-types scripts/smoke-privacy.mts",
     "check:repo": "node --experimental-strip-types scripts/check-repo-data.mts",
-    "doctor": "node --experimental-strip-types scripts/doctor.mts",
+    "doctor": "node scripts/run-doctor.mjs",
     "smoke:setup": "node --experimental-strip-types scripts/smoke-setup.mts",
     "smoke:http": "node --experimental-strip-types scripts/smoke-http.mts",
     "check": "npm run typecheck && npm run smoke && npm run smoke:store && npm run smoke:security && npm run smoke:workflow && npm run smoke:adapters && npm run smoke:privacy && npm run smoke:setup && npm run check:repo && npm run build && npm run smoke:http"

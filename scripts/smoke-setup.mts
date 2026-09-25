@@ -1,5 +1,7 @@
 import assert from "node:assert/strict"
+import { spawnSync } from "node:child_process"
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { getSetupStatus, keyStatus, probeStorage } from "../src/config/setup.ts"
@@ -33,4 +35,18 @@ let launches = 0
 const denied = { async launch() { launches++; throw new Error("FeatureRequiresPlan: paid plan") } } as unknown as Solari
 await assert.rejects(launchResilient(denied, "fixture"), /provider plan/)
 assert.equal(launches, 1, "no silent paid-capability downgrade or second session")
-console.log("Setup checks passed: Node, key placeholders, optional scoring, local storage, safe output, provider-plan errors")
+// `npm run doctor` goes through a plain-JS launcher so old Node gets a clear
+// answer; run it from an empty folder so no local .env can leak into the result.
+const doctorHome = mkdtempSync(join(tmpdir(), "pj-doctor-"))
+try {
+  const doctor = spawnSync(process.execPath, [fileURLToPath(new URL("./run-doctor.mjs", import.meta.url))], {
+    cwd: doctorHome, encoding: "utf8",
+    env: { NODE_ENV: "test", PATH: process.env.PATH ?? "", PJ_DATA_DIR: join(doctorHome, "data") },
+  })
+  assert.match(doctor.stdout, /PrivacyJanitor local setup check/)
+  assert.match(doctor.stdout, /Solari key: missing/)
+  assert.equal(doctor.status, 1, "a missing key needs attention")
+} finally {
+  rmSync(doctorHome, { recursive: true, force: true })
+}
+console.log("Setup checks passed: Node, key placeholders, optional scoring, local storage, safe output, provider-plan errors, doctor launcher")
