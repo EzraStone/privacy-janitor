@@ -90,50 +90,54 @@ export async function runScan(
     if (!store.getIdentity(identityId) || !store.getScanRun(run.id)) return run
 
     let checkpointed = false
+    let evidenceDir: string | undefined
     try {
-      const { result: observation, evidence } = await withSession(
-        `scan-${adapter.id}`,
-        async (page, runEvidence) => {
-          const result = await adapter.scan(page, identity)
-          // Adapters capture the result page before navigating into profiles.
-          // Keep a last-page fallback only if that evidence capture failed.
-          const screenshot = result.searchScreenshot ??
-            await page.screenshot({ fullPage: true }).catch(() => undefined)
-          if (screenshot) runEvidence.screenshot("scan-result-state", screenshot)
-          return result
-        },
-      )
+      await withSession(`scan-${adapter.id}`, async (page, runEvidence) => {
+        evidenceDir = runEvidence.evidenceDir
+        const observation = await adapter.scan(page, identity)
+        // Adapters capture the result page before navigating into profiles.
+        // Keep a last-page fallback only if that evidence capture failed.
+        const screenshot = observation.searchScreenshot ??
+          await page.screenshot({ fullPage: true }).catch(() => undefined)
+        if (screenshot) runEvidence.screenshot("scan-result-state", screenshot)
 
-      const brokerResult: ScanBrokerResult = {
-        brokerId: adapter.id,
-        ok: observation.outcome !== "inconclusive",
-        outcome: observation.outcome,
-        listingsFound: observation.listings.length,
-        issueCode: observation.issueCode,
-        error: observation.detail,
-        evidenceDir: evidence.evidenceDir,
-      }
-      const events = store.recordBrokerScanObservation({
-        identityId,
-        brokerId: adapter.id,
-        runKind: run.kind,
-        observation,
-        evidenceDir: evidence.evidenceDir,
-        runId: run.id,
-        result: brokerResult,
+        // Checkpoint before the browser closes, as opt-out receipts do: a
+        // teardown failure must not discard a completed scan, or orphan the
+        // screenshot just written where profile deletion cannot find it.
+        const brokerResult: ScanBrokerResult = {
+          brokerId: adapter.id,
+          ok: observation.outcome !== "inconclusive",
+          outcome: observation.outcome,
+          listingsFound: observation.listings.length,
+          issueCode: observation.issueCode,
+          error: observation.detail,
+          evidenceDir: runEvidence.evidenceDir,
+        }
+        const events = store.recordBrokerScanObservation({
+          identityId,
+          brokerId: adapter.id,
+          runKind: run.kind,
+          observation,
+          evidenceDir: runEvidence.evidenceDir,
+          runId: run.id,
+          result: brokerResult,
+        })
+        run.events.push(...events)
+        run.results.push(brokerResult)
+        checkpointed = true
       })
-      run.events.push(...events)
-      run.results.push(brokerResult)
-      checkpointed = true
     } catch (err) {
-      run.results.push({
-        brokerId: adapter.id,
-        ok: false,
-        outcome: "inconclusive",
-        listingsFound: 0,
-        issueCode: "unknown",
-        error: err instanceof Error ? err.message : String(err),
-      })
+      if (!checkpointed) {
+        run.results.push({
+          brokerId: adapter.id,
+          ok: false,
+          outcome: "inconclusive",
+          listingsFound: 0,
+          issueCode: "unknown",
+          error: err instanceof Error ? err.message : String(err),
+          evidenceDir,
+        })
+      }
     }
 
     // A crash after this point resumes at the next broker, not from scratch.

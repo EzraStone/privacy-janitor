@@ -181,6 +181,19 @@ try {
   assert.ok(store.getScanRun(scan.id)?.finishedAt, "the run is finished")
   assert.ok(store.listListings(identity.id).some((l) => l.url.endsWith("/scan-hit")), "findings are stored")
   console.log("ok: a scan records each broker's observation and evidence")
+
+  // A browser-close failure after a completed scan must neither discard the
+  // findings nor orphan the search screenshot the scan just wrote.
+  throwOnClose = true
+  const torn = await runScan(identity.id, undefined, "scan", { withSession, brokers: [scanBroker] })
+  throwOnClose = false
+  assert.equal(torn.results[0]?.outcome, "found", "a completed scan survives a browser-close failure")
+  assert.equal(torn.results[0]?.evidenceDir, join(directory, "scan-whitepages"), "its screenshots stay recorded")
+  const exploding: BrokerAdapter = { ...scanBroker, scan: async () => { throw new Error("selector exploded") } }
+  const failed = await runScan(identity.id, undefined, "scan", { withSession, brokers: [exploding] })
+  assert.equal(failed.results[0]?.outcome, "inconclusive")
+  assert.equal(failed.results[0]?.evidenceDir, join(directory, "scan-whitepages"), "a failed session keeps its evidence path")
+  console.log("ok: scan findings and evidence survive browser teardown failures")
 } finally {
   await service.waitForIdle()
   store.closeDb()
