@@ -37,7 +37,9 @@ user data, live broker results, or live submissions are included in these reposi
 
 1. **Add a profile** — use your own details or those of someone who authorized you.
 2. **Scan and review** — search the supported brokers, then confirm which listings are yours.
+   A misclicked decision can go back to review until a removal request is sent.
 3. **Rank exposure (optional)** — send tokenized listing fields to Groq for a suggested priority.
+   The report you read shows your real values again, restored on this machine.
 4. **Preview and approve** — inspect the filled form before authorizing the removal request.
 5. **Confirm and recheck** — complete the broker's email step, then run a later rescan.
 
@@ -52,7 +54,8 @@ user data, live broker results, or live submissions are included in these reposi
 - **Evidence:** local screenshots and remote session identifiers help review what happened.
   Solari replay availability depends on the provider; failed runs may have incomplete evidence.
 - **Profile-scoped history:** rejected matches, prior requests, absence, and relists stay
-  distinguishable. Delete a profile to remove its local records and referenced screenshots.
+  distinguishable. Delete a profile to remove its local records and referenced screenshots;
+  **Reset all** clears the entire local evidence folder, including unreferenced files.
 
 Preparation and approved submission reuse one bounded sticky-proxy label within Solari's
 configured 30-minute window. That window can expire while waiting for approval; it does not
