@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { Identity, Listing, ScanRun, Submission, SubmissionStatus } from "@/types"
+import type { Identity, Listing, MatchExplanation, ScanRun, Submission, SubmissionStatus } from "@/types"
 import type { ExposureReport } from "@/scoring"
 import { activeSubmissionStatuses } from "@/engine/submission-state"
 import type { SetupStatus } from "@/config/setup"
@@ -12,6 +12,7 @@ interface StateResponse {
   listings: Listing[]
   submissions: Submission[]
   scans: ScanRun[]
+  matchHints?: Record<string, MatchExplanation>
 }
 
 const statusLabel: Record<SubmissionStatus, string> = {
@@ -365,11 +366,12 @@ export default function Home() {
           <h2 className="text-xl font-semibold tracking-tight">Is this {identity.fullName}?</h2>
           <p className="text-sm leading-6 text-zinc-500">
             Confirm each listing before anything is removed — namesakes are common and wrong
-            removals cause real trouble.
+            removals cause real trouble. Each card notes which details match your profile;
+            the hints never decide for you.
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             {pendingListings.map((l) => (
-              <ListingCard key={l.id} listing={l}
+              <ListingCard key={l.id} listing={l} match={state?.matchHints?.[l.id]}
                 onConfirm={() => void stateAction({ action: "confirm-listing", listingId: l.id }, `c-${l.id}`)}
                 onReject={() => void stateAction({ action: "reject-listing", listingId: l.id }, `c-${l.id}`)}
               />
@@ -659,10 +661,55 @@ function IdentityForm({
   )
 }
 
+// Name and location alone never read as a strong match: they are exactly what
+// a namesake shares. Only an agreeing age or relative earns the stronger line,
+// and any contradiction leads.
+function matchSummary(m: MatchExplanation): string {
+  if (m.place === "elsewhere" || m.age === "outside") {
+    return "Some details don’t fit your profile — this may be someone else."
+  }
+  const placeFits = m.place === "city_and_state" || m.place === "state"
+  if (placeFits && m.name !== "other" && (m.age === "fits" || m.relatives === "shared")) {
+    return "Name, location and a personal detail match your profile."
+  }
+  if (placeFits) return "Location matches — so would a namesake’s. Check age and relatives."
+  return "Too few details to compare — open the listing before deciding."
+}
+
+// ✓ agrees, ✗ contradicts, – unknown or inconclusive; the words carry the meaning.
+function matchDetails(m: MatchExplanation): Array<[string, string]> {
+  const details: Array<[string, string]> = [
+    m.name === "same" ? ["✓", "Same name as your profile"]
+      : m.name === "similar" ? ["✓", "Similar name, such as a middle initial"]
+        : ["–", "Name printed differently from your profile"],
+    m.place === "city_and_state" ? ["✓", "An address in your city and state"]
+      : m.place === "state" ? ["–", "An address in your state, another city"]
+        : m.place === "elsewhere" ? ["✗", "No address in your state"]
+          : ["–", "No address listed"],
+  ]
+  if (m.age) details.push(m.age === "fits" ? ["✓", "Age fits your profile’s range"] : ["✗", "Age outside your profile’s range"])
+  if (m.relatives) details.push(m.relatives === "shared" ? ["✓", "Shares a relative’s first name"] : ["–", "No relatives in common"])
+  return details
+}
+
+function MatchHint({ match }: { match: MatchExplanation }) {
+  return (
+    <div className="space-y-1 border-l border-white/20 pl-3 text-xs">
+      <p className="text-zinc-300">{matchSummary(match)}</p>
+      <ul className="space-y-0.5 text-zinc-500">
+        {matchDetails(match).map(([mark, text]) => (
+          <li key={text}><span aria-hidden="true" className="inline-block w-4">{mark}</span>{text}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function ListingCard({
-  listing, onConfirm, onReject, onReviewAgain,
+  listing, match, onConfirm, onReject, onReviewAgain,
 }: {
   listing: Listing
+  match?: MatchExplanation
   onConfirm?: () => void
   onReject?: () => void
   onReviewAgain?: () => void
@@ -679,6 +726,7 @@ function ListingCard({
       <a href={listing.url} target="_blank" rel="noopener noreferrer" className="link-std block truncate">
         {listing.url}
       </a>
+      {match && <MatchHint match={match} />}
       {onConfirm && onReject && (
         <div className="flex gap-2 pt-1">
           <button className="btn-primary" onClick={onConfirm}>This is me</button>
