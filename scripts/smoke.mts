@@ -18,6 +18,7 @@ import {
   scoreMatch,
 } from "../src/adapters/helpers.ts"
 import { buildRedactionMap, redactText, redactListing } from "../src/scoring/redact.ts"
+import { parseExposureReport } from "../src/scoring/index.ts"
 import type { Identity, Listing } from "../src/types.ts"
 
 let failures = 0
@@ -247,11 +248,12 @@ const legacyText = redactText("Casey Example lives near Chicago", buildRedaction
 check("blank legacy values never inject tokens", legacyText === "[RELATIVE_1] lives near Chicago")
 
 console.log("smoke: scoring parser tolerance")
-// simulate the safeParseJson fallback path with fences
-const fenced = '```json\n{"rankings":[],"summary":"ok"}\n```'
-const cleaned = fenced.replace(/```json|```/g, "").trim()
-const parsed = JSON.parse(cleaned)
-check("fence-stripped JSON parses", parsed.summary === "ok")
+// Exercise the real parser, not a reimplementation of its fence stripping.
+const fencedReport = parseExposureReport('```json\n{"rankings":[],"summary":"ok"}\n```', [], "test-model")
+check("fence-stripped JSON parses", fencedReport.summary === "ok")
+let unparseableRejected = false
+try { parseExposureReport("not json at all", [], "test-model") } catch { unparseableRejected = true }
+check("unparseable model output is rejected", unparseableRejected)
 
 console.log("")
 if (failures > 0) {

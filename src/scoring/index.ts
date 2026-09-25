@@ -90,6 +90,11 @@ Constraints:
   })
 
   const raw = completion.choices[0]?.message?.content ?? ""
+  return parseExposureReport(raw, listings, model)
+}
+
+/** Turn the model's raw reply into a report. Pure, so it is testable without a provider. */
+export function parseExposureReport(raw: string, listings: Listing[], model: string): ExposureReport {
   const parsed = safeParseJson(raw)
   if (!parsed) throw new Error("Exposure scoring: model returned unparseable JSON")
 
