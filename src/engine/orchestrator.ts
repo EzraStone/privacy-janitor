@@ -4,7 +4,7 @@
  * stealth session and files evidence (screenshots + replay URLs) into the
  * store, so every action is auditable later.
  */
-import type { Identity, Listing, ScanBrokerResult, ScanKind, ScanRun } from "../types.ts"
+import type { BrokerAdapter, Identity, Listing, ScanBrokerResult, ScanKind, ScanRun } from "../types.ts"
 import { adapters, getAdapter } from "../adapters/registry.ts"
 import * as store from "../store/index.ts"
 import { withBrokerSession } from "./solari.ts"
@@ -60,11 +60,20 @@ function scheduleScan(run: ScanRun): void {
   activeScans.set(run.id, task)
 }
 
+/** Injected in tests so a scan can run without a provider or live brokers. */
+export type ScanDependencies = {
+  withSession?: typeof withBrokerSession
+  brokers?: BrokerAdapter[]
+}
+
 export async function runScan(
   identityId: string,
   resumeRunId?: string,
   kind: ScanKind = "scan",
+  dependencies: ScanDependencies = {},
 ): Promise<ScanRun> {
+  const withSession = dependencies.withSession ?? withBrokerSession
+  const brokers = dependencies.brokers ?? adapters
   const identity = store.getIdentity(identityId)
   if (!identity) throw new Error(`identity ${identityId} not found`)
 
@@ -75,14 +84,14 @@ export async function runScan(
   if (run.finishedAt) return run
   const completedBrokers = new Set(run.results.map((result) => result.brokerId))
 
-  for (const adapter of adapters) {
+  for (const adapter of brokers) {
     if (completedBrokers.has(adapter.id)) continue
     // The user may delete the profile while a remote broker session is running.
     if (!store.getIdentity(identityId) || !store.getScanRun(run.id)) return run
 
     let checkpointed = false
     try {
-      const { result: observation, evidence } = await withBrokerSession(
+      const { result: observation, evidence } = await withSession(
         `scan-${adapter.id}`,
         async (page, runEvidence) => {
           const result = await adapter.scan(page, identity)

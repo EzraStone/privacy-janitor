@@ -9,6 +9,7 @@ const directory = mkdtempSync(join(tmpdir(), "pj-workflow-"))
 process.env.PJ_DATA_DIR = directory
 const store = await import("../src/store/index.ts")
 const { createOptOutService } = await import("../src/engine/optouts.ts")
+const { runScan } = await import("../src/engine/orchestrator.ts")
 const now = new Date().toISOString()
 const identity: Identity = { id: "test-person", fullName: "Jordan Example", city: "Chicago", stateCode: "IL", createdAt: now }
 let preparedCount = 0
@@ -164,6 +165,22 @@ try {
   assert.equal(confirmedCount, confirmsBeforeTeardown + 1, "a confirmation during submit teardown still runs")
   assert.equal(store.getSubmission(teardown.id)?.status, "confirmed")
   console.log("ok: a confirmation during submit teardown is not dropped")
+
+  const scanned = (id: string): Listing => ({
+    id, identityId: identity.id, brokerId: "whitepages", url: `https://www.whitepages.com/name/Jordan-Example/${id}`,
+    displayName: identity.fullName, exposedData: {}, confirmedMine: null, firstSeenAt: now, lastSeenAt: now,
+  })
+  const scanBroker: BrokerAdapter = {
+    ...adapter, id: "whitepages",
+    scan: async () => ({ outcome: "found", listings: [scanned("scan-hit")] }),
+  }
+  const scan = await runScan(identity.id, undefined, "scan", { withSession, brokers: [scanBroker] })
+  assert.equal(scan.results.length, 1)
+  assert.equal(scan.results[0].outcome, "found")
+  assert.equal(scan.results[0].evidenceDir, join(directory, "scan-whitepages"))
+  assert.ok(store.getScanRun(scan.id)?.finishedAt, "the run is finished")
+  assert.ok(store.listListings(identity.id).some((l) => l.url.endsWith("/scan-hit")), "findings are stored")
+  console.log("ok: a scan records each broker's observation and evidence")
 } finally {
   await service.waitForIdle()
   store.closeDb()
