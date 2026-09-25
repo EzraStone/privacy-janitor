@@ -3,12 +3,13 @@
  *
  * Given all confirmed listings, the model returns a ranked kill list: each
  * listing gets a 0-100 exposure score + a plain-language rationale + the
- * specific data that makes it risky (still tokenized back at render time
- * locally, so the user sees real values).
+ * specific data that makes it risky. The model sees only tokens; they are
+ * mapped back to real values on this machine before the report is returned.
  */
 import Groq from "groq-sdk"
 import type { Identity, Listing } from "@/types"
-import { buildRedactionMap, redactListing, redactText } from "./redact.ts"
+import { buildRedactionMap, redactListing, redactText, restoreText } from "./redact.ts"
+import type { RedactionMap } from "./redact.ts"
 import { keyStatus } from "../config/setup.ts"
 
 export interface ListingRisk {
@@ -90,11 +91,18 @@ Constraints:
   })
 
   const raw = completion.choices[0]?.message?.content ?? ""
-  return parseExposureReport(raw, listings, model)
+  return parseExposureReport(raw, listings, map, model)
 }
 
-/** Turn the model's raw reply into a report. Pure, so it is testable without a provider. */
-export function parseExposureReport(raw: string, listings: Listing[], model: string): ExposureReport {
+/** Turn the model's raw reply into a report. Pure, so it is testable without a
+ *  provider. The model only ever saw tokens; the report the user reads carries
+ *  their real values again, restored here on this machine. */
+export function parseExposureReport(
+  raw: string,
+  listings: Listing[],
+  map: RedactionMap,
+  model: string,
+): ExposureReport {
   const parsed = safeParseJson(raw)
   if (!parsed) throw new Error("Exposure scoring: model returned unparseable JSON")
 
@@ -113,8 +121,8 @@ export function parseExposureReport(raw: string, listings: Listing[], model: str
       listingId: listings[index].id,
       brokerId: listings[index].brokerId,
       score: Math.max(0, Math.min(100, Math.round(score))),
-      rationale: String(r.rationale ?? "").slice(0, 500),
-      recommendedAction: String(r.recommended_action ?? "").slice(0, 300),
+      rationale: restoreText(String(r.rationale ?? "").slice(0, 500), map),
+      recommendedAction: restoreText(String(r.recommended_action ?? "").slice(0, 300), map),
     })
   }
   // With nothing usable, the average would read 0/100: "no exposure".
@@ -129,7 +137,7 @@ export function parseExposureReport(raw: string, listings: Listing[], model: str
   return {
     totalScore,
     rankings: rankings.sort((a, b) => b.score - a.score),
-    summary: String(parsed.summary ?? "").slice(0, 1000),
+    summary: restoreText(String(parsed.summary ?? "").slice(0, 1000), map),
     generatedAt: new Date().toISOString(),
     model,
   }

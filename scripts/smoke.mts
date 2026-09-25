@@ -249,10 +249,11 @@ check("blank legacy values never inject tokens", legacyText === "[RELATIVE_1] li
 
 console.log("smoke: scoring parser tolerance")
 // Exercise the real parser, not a reimplementation of its fence stripping.
-const fencedReport = parseExposureReport('```json\n{"rankings":[],"summary":"ok"}\n```', [], "test-model")
+const emptyMap = buildRedactionMap(typedIdentity, [])
+const fencedReport = parseExposureReport('```json\n{"rankings":[],"summary":"ok"}\n```', [], emptyMap, "test-model")
 check("fence-stripped JSON parses", fencedReport.summary === "ok")
 let unparseableRejected = false
-try { parseExposureReport("not json at all", [], "test-model") } catch { unparseableRejected = true }
+try { parseExposureReport("not json at all", [], emptyMap, "test-model") } catch { unparseableRejected = true }
 check("unparseable model output is rejected", unparseableRejected)
 
 // The model's reply is untrusted: indices can repeat or point past the list,
@@ -268,16 +269,35 @@ const noisy = parseExposureReport(rank([
   { listing_index: 5, score: 99, rationale: "past the end", recommended_action: "x" },
   { listing_index: -1, score: 99, rationale: "negative", recommended_action: "x" },
   { listing_index: 1, score: "high", rationale: "not a number", recommended_action: "x" },
-]), pair, "test-model")
+]), pair, emptyMap, "test-model")
 check("out-of-range, repeated and unscored rankings are dropped",
   noisy.rankings.length === 1 && noisy.rankings[0].listingId === "lst_a")
 check("the first ranking for a listing wins", noisy.rankings[0].score === 80)
 check("total score stays a number", noisy.totalScore === 80)
 check("numeric-string scores are accepted",
-  parseExposureReport(rank([{ listing_index: 1, score: "42", rationale: "", recommended_action: "" }]), pair, "m").totalScore === 42)
+  parseExposureReport(rank([{ listing_index: 1, score: "42", rationale: "", recommended_action: "" }]), pair, emptyMap, "m").totalScore === 42)
 let emptyRejected = false
-try { parseExposureReport(rank([]), pair, "test-model") } catch { emptyRejected = true }
+try { parseExposureReport(rank([]), pair, emptyMap, "test-model") } catch { emptyRejected = true }
 check("no usable rankings is an error, not a reassuring 0/100", emptyRejected)
+
+// The model can only speak in tokens; the user must read their real values.
+const restoreMap = buildRedactionMap(typedIdentity, [typedListing])
+const homeAddress = typedListing.exposedData.addresses![0]
+const phone = typedListing.exposedData.phones![0]
+const tokenFor = (value: string) => restoreMap.valueToToken.get(value.toLowerCase())!
+const restored = parseExposureReport(JSON.stringify({
+  rankings: [{
+    listing_index: 0, score: 70,
+    rationale: `Exposes ${tokenFor(homeAddress)} and ${tokenFor(phone)}.`,
+    recommended_action: `Remove ${tokenFor(typedIdentity.fullName)} from this broker first.`,
+  }],
+  summary: `${tokenFor(typedIdentity.fullName)} is findable at ${tokenFor(homeAddress)}. See [ADDR_99].`,
+}), [typedListing], restoreMap, "test-model")
+check("rationale shows the user real values", restored.rankings[0].rationale === `Exposes ${homeAddress} and ${phone}.`)
+check("recommended action shows real values",
+  restored.rankings[0].recommendedAction === `Remove ${typedIdentity.fullName} from this broker first.`)
+check("summary shows real values; invented tokens stay as written",
+  restored.summary === `${typedIdentity.fullName} is findable at ${homeAddress}. See [ADDR_99].`)
 
 console.log("")
 if (failures > 0) {

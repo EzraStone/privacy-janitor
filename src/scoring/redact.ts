@@ -85,6 +85,12 @@ export function redactText(text: string, map: RedactionMap): string {
   return out
 }
 
+/** Map tokens in model output back to real values, locally, after the call.
+ *  Tokens the model invented have no value and are left as written. */
+export function restoreText(text: string, map: RedactionMap): string {
+  return text.replace(/\[[A-Z]+_\d+\]/g, (token) => map.tokenToValue.get(token) ?? token)
+}
+
 /** Redact a listing into the structure-only shape we send to the LLM. */
 export function redactListing(listing: Listing, map: RedactionMap): string {
   const parts: string[] = []
