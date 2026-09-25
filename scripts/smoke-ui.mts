@@ -7,7 +7,7 @@
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
 import { once } from "node:events"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -87,6 +87,17 @@ child.stdout.on("data", (data) => {
 })
 child.stderr.on("data", () => {})
 
+// WCAG 2.1 A/AA through axe-core. Muted text once sat at 4.2:1 against the 4.5:1
+// minimum; this keeps contrast and every other automated rule from regressing.
+const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8")
+type AxeResult = { violations: Array<{ id: string; nodes: unknown[] }> }
+async function wcagViolations(page: Page): Promise<string[]> {
+  await page.addScriptTag({ content: axeSource })
+  const result = await page.evaluate(() => (window as unknown as { axe: { run: (context: Document, options: object) => Promise<AxeResult> } })
+    .axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] } }))
+  return result.violations.map((violation) => `${violation.id} ×${violation.nodes.length}`)
+}
+
 const card = (page: Page, id: string): Locator => page.locator(".card", { has: page.locator(`a[href$="/${id}"]`) })
 const row = (page: Page, name: string): Locator => page.locator(".card", { hasText: name })
 const button = (scope: Locator, name: string) => scope.getByRole("button", { name, exact: true })
@@ -118,11 +129,13 @@ try {
   assert.match(await headline("hint-sparse"), /Too few details/)
   assert.match(await card(page, "hint-sparse").innerText(), /–\s*No address listed/, "unknown shows as –, not ✗")
   console.log("ok: review cards explain which details match")
+  assert.deepEqual(await wcagViolations(page), [], "dashboard meets WCAG 2.1 AA")
 
   // Every decision can go back to review before a request is sent.
   await button(card(page, "hint-contra"), "Not me").click()
   const rejected = page.getByText("Marked not you (1)")
   await rejected.click()
+  assert.deepEqual(await wcagViolations(page), [], "dashboard with rejected listings open meets WCAG 2.1 AA")
   await button(card(page, "hint-contra"), "Review again").click()
   await button(card(page, "hint-contra"), "This is me").waitFor()
   await button(card(page, "hint-namesake"), "This is me").click()
@@ -130,7 +143,7 @@ try {
   const queued = page.locator("section", { hasText: "Opt-out queue" }).locator(".card", { hasText: person })
   await button(queued, "Not me after all").click()
   await button(card(page, "hint-namesake"), "This is me").waitFor()
-  console.log("ok: listing decisions can be undone from the dashboard")
+  console.log("ok: listing decisions can be undone; WCAG 2.1 AA holds in both views")
 
   // Request states: captions, recorded sessions, and the ways out.
   assert.match(await row(page, "Queue prepared").innerText(), /approve before we submit/)
@@ -162,7 +175,7 @@ try {
   const framed = attacker.frames().find((frame) => frame !== attacker.mainFrame())
   assert.ok(!(await framed?.locator("body").innerText().catch(() => ""))?.includes("PrivacyJanitor"), "dashboard refused to render in a frame")
   console.log("ok: setup advice, no page errors, and no framing by other sites")
-  console.log("UI checks passed: match hints, undo, request states, rescan diff, setup advice, framing")
+  console.log("UI checks passed: match hints, undo, WCAG 2.1 AA, request states, rescan diff, setup advice, framing")
 } finally {
   await browser.close()
   if (child.exitCode === null) child.kill()
