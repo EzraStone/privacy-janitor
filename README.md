@@ -119,8 +119,8 @@ No live broker requests run as part of `npm run check`.
 
 | Data or activity | Destination and limits |
 |------------------|------------------------|
-| Profiles, matches, requests, scan history | Local SQLite at `data/privacy-janitor.db`, or the folder set by `PJ_DATA_DIR`. Not encrypted by the app. |
-| Screenshots | Local `data/evidence/`; may contain sensitive details. |
+| Profiles, matches, requests, scan history | Local SQLite at `data/privacy-janitor.db`, or the folder set by `PJ_DATA_DIR`. Readable only by your user account on macOS and Linux; not encrypted by the app. |
+| Screenshots | Local `data/evidence/`, readable only by your user account on macOS and Linux; may contain sensitive details. |
 | Searches and form entry | Solari's remote browsers and the broker sites receive entered details. Preparation can transmit fields before final approval. |
 | Session recordings | Requested from Solari. Provider-side storage and retention are outside the local app's control. Treat replay links as sensitive. |
 | Optional Groq scoring | Known identifier and location values are replaced with tokens. Redaction reduces disclosure but is not a guarantee of anonymity. |
