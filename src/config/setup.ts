@@ -53,8 +53,12 @@ export function probeStorage(dataDir: string): SetupStatus["storage"] {
   }
 }
 
+/** The only variables setup reads. Narrower than NodeJS.ProcessEnv, which
+ *  Next.js augments to require NODE_ENV, so callers can pass just these keys. */
+export type SetupEnv = { SOLARI_API_KEY?: string; GROQ_API_KEY?: string }
+
 export function getSetupStatus(options: {
-  env?: NodeJS.ProcessEnv
+  env?: SetupEnv
   nodeVersion?: string
   storageProbe?: () => SetupStatus["storage"]
 } = {}): SetupStatus {
