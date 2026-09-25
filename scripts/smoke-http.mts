@@ -114,6 +114,9 @@ try {
   const dashboard = await fetch(base)
   // Opening a broker listing must not reveal that the visit came from here.
   assert.equal(dashboard.headers.get("referrer-policy"), "no-referrer")
+  // No other site may frame the dashboard: a click inside it approves broker requests.
+  assert.equal(dashboard.headers.get("content-security-policy"), "frame-ancestors 'none'")
+  assert.equal(dashboard.headers.get("x-frame-options"), "DENY")
   const html = await dashboard.text()
   assert.match(html, /Setup checks/)
   assert.match(html, /Recheck setup/)
@@ -124,7 +127,7 @@ try {
   assert.equal((await post("/api/state", { action: "reset-all" })).status, 200)
   assert.deepEqual(readdirSync(evidence), [], "reset leaves no evidence behind")
   assert.equal(readFileSync(join(outside, "secret.txt"), "utf8"), "never served", "reset never follows a link outside the jail")
-  console.log("Local HTTP checks passed: setup endpoint, origin protections, request shapes, evidence jail, profile validation, referrer policy, synthetic profile, preflight rejection, dashboard render, full reset")
+  console.log("Local HTTP checks passed: setup endpoint, origin protections, request shapes, evidence jail, profile validation, referrer and framing policy, synthetic profile, preflight rejection, dashboard render, full reset")
 } finally {
   if (child.exitCode === null && !spawnFailed) child.kill()
   await exited.catch(() => {})
