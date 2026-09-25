@@ -48,6 +48,13 @@ try {
   assert.equal(setup.providerAccess, "not_checked")
   assert.equal((await fetch(`${base}/api/setup`, { headers: { origin: "https://unrelated.invalid" } })).status, 403)
   assert.equal((await fetch(`${base}/api/setup`, { headers: { "sec-fetch-site": "cross-site" } })).status, 403)
+  // Valid JSON that is not an object must be a clean 400, not a crash.
+  for (const route of ["/api/state", "/api/actions"]) {
+    for (const body of ["null", "[]", "42", '"text"']) {
+      const response = await fetch(`${base}${route}`, { method: "POST", headers: { "content-type": "application/json" }, body })
+      assert.equal(response.status, 400, `${route} rejects a ${body} body`)
+    }
+  }
   const empty = await (await fetch(`${base}/api/state`)).json()
   assert.deepEqual(empty.identities, [])
   const saved = await post("/api/state", { action: "save-identity", identity: { fullName: "Jordan Example", city: "Chicago", stateCode: "IL" } })
@@ -110,7 +117,7 @@ try {
   const html = await dashboard.text()
   assert.match(html, /Setup checks/)
   assert.match(html, /Recheck setup/)
-  console.log("Local HTTP checks passed: setup endpoint, origin protections, evidence jail, profile validation, referrer policy, synthetic profile, preflight rejection, dashboard render")
+  console.log("Local HTTP checks passed: setup endpoint, origin protections, request shapes, evidence jail, profile validation, referrer policy, synthetic profile, preflight rejection, dashboard render")
 } finally {
   if (child.exitCode === null && !spawnFailed) child.kill()
   await exited.catch(() => {})

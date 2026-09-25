@@ -34,9 +34,16 @@ export async function readJson<T>(req: Request, maxBytes = 16_384): Promise<T> {
   if (new TextEncoder().encode(raw).byteLength > maxBytes) {
     throw new RequestValidationError("request body too large", 413)
   }
+  let parsed: unknown
   try {
-    return JSON.parse(raw) as T
+    parsed = JSON.parse(raw)
   } catch {
     throw new RequestValidationError("invalid JSON body")
   }
+  // Every route reads named fields, so anything but a plain object is a
+  // client error — `null` would otherwise crash the handler with a 500.
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new RequestValidationError("JSON body must be an object")
+  }
+  return parsed as T
 }
