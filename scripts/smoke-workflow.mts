@@ -16,6 +16,7 @@ let submittedCount = 0
 let confirmedCount = 0
 let throwAfterSubmit = false
 let throwOnClose = false
+let closeGate: Promise<void> | undefined
 const pins: string[] = []
 const page = { screenshot: async () => Buffer.from("synthetic") } as BrokerPage
 const adapter: BrokerAdapter = {
@@ -39,6 +40,7 @@ const withSession: typeof withBrokerSession = async (name, callback, options = {
   }
   pins.push(evidence.proxySessionId)
   const result = await callback(page, evidence, {} as never)
+  if (closeGate) await closeGate
   if (throwOnClose) throw new Error("browser close failed")
   return { result, evidence }
 }
@@ -136,6 +138,27 @@ try {
   assert.equal(store.getSubmission(queued.id)?.status, "awaiting_email", "cleanup failure cannot overwrite a saved receipt")
   throwOnClose = false
   console.log("ok: approved work resumes; a browser-close failure retains the receipt")
+
+  // The submit job saves its receipt inside the session, then stays registered
+  // while the browser closes. A confirmation arriving in that window must not be
+  // swallowed by the lingering submit job: its URL exists only in memory.
+  listing("teardown")
+  const teardown = await service.prepare("teardown", "jordan@example.com")
+  let releaseClose = () => {}
+  closeGate = new Promise((resolve) => { releaseClose = resolve })
+  service.approve("teardown", teardown.id)
+  for (let i = 0; i < 100 && store.getSubmission(teardown.id)?.status !== "awaiting_email"; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
+  assert.equal(store.getSubmission(teardown.id)?.status, "awaiting_email")
+  closeGate = undefined
+  const confirmsBeforeTeardown = confirmedCount
+  service.confirm("teardown", teardown.id, "https://www.spokeo.com/confirm?test=synthetic")
+  releaseClose()
+  await service.waitForIdle()
+  assert.equal(confirmedCount, confirmsBeforeTeardown + 1, "a confirmation during submit teardown still runs")
+  assert.equal(store.getSubmission(teardown.id)?.status, "confirmed")
+  console.log("ok: a confirmation during submit teardown is not dropped")
 } finally {
   await service.waitForIdle()
   store.closeDb()

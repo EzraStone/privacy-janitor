@@ -34,7 +34,10 @@ export function createOptOutService(dependencies: Dependencies = {}) {
   const withSession = dependencies.withSession ?? withBrokerSession
   const adapterFor = dependencies.adapterFor ?? getAdapter
   const preparations = new Map<string, Promise<Submission>>()
-  const jobs = new Map<string, Promise<void>>()
+  // Keyed per operation: a submit job stays registered while its browser
+  // closes, after the receipt is saved. A confirm arriving in that window must
+  // not be deduplicated against it — its URL exists only in memory.
+  const jobs = new Map<string, { submissionId: string; done: Promise<void> }>()
 
   async function prepare(listingId: string, contactEmail: string): Promise<Submission> {
     store.requireActionableListing(listingId)
@@ -73,12 +76,13 @@ export function createOptOutService(dependencies: Dependencies = {}) {
     try { return await task } finally { preparations.delete(listingId) }
   }
 
-  function schedule(submissionId: string, task: () => Promise<void>): void {
-    if (jobs.has(submissionId)) return
-    const job = Promise.resolve().then(task).catch(() => {
+  function schedule(operation: "submit" | "confirm", submissionId: string, task: () => Promise<void>): void {
+    const key = `${operation}:${submissionId}`
+    if (jobs.has(key)) return
+    const done = Promise.resolve().then(task).catch(() => {
       // The worker records actionable failures in SQLite for the queue.
-    }).finally(() => jobs.delete(submissionId))
-    jobs.set(submissionId, job)
+    }).finally(() => jobs.delete(key))
+    jobs.set(key, { submissionId, done })
   }
 
   async function submit(submissionId: string): Promise<void> {
@@ -133,7 +137,7 @@ export function createOptOutService(dependencies: Dependencies = {}) {
       if (["submitting", "submitted", "awaiting_email", "confirming", "confirmed", "removed"].includes(sub.status)) return sub
       throw new Error("prepare a new preview before approving this attempt")
     }
-    schedule(sub.id, () => submit(sub.id))
+    schedule("submit", sub.id, () => submit(sub.id))
     return store.getSubmission(sub.id)!
   }
 
@@ -152,7 +156,7 @@ export function createOptOutService(dependencies: Dependencies = {}) {
       return store.getSubmission(sub.id)!
     }
     // The confirmation URL stays in this task's memory, never in the database.
-    schedule(sub.id, async () => {
+    schedule("confirm", sub.id, async () => {
       try {
         await withSession(`confirm-${adapter.id}`, async (page, evidence) => {
           store.requireActionableListing(listingId)
@@ -177,15 +181,18 @@ export function createOptOutService(dependencies: Dependencies = {}) {
     prepare, approve, confirm,
     resume() {
       for (const sub of store.listSubmissions()) {
-        if (sub.status === "approved") schedule(sub.id, () => submit(sub.id))
+        if (sub.status === "approved") schedule("submit", sub.id, () => submit(sub.id))
       }
     },
     isBusy(identityId?: string) {
       const listingIds = identityId ? new Set(store.listListings(identityId).map((listing) => listing.id)) : undefined
       return [...preparations.keys()].some((id) => !listingIds || listingIds.has(id)) ||
-        [...jobs.keys()].some((id) => !listingIds || listingIds.has(store.getSubmission(id)?.listingId ?? ""))
+        [...jobs.values()].some(({ submissionId }) =>
+          !listingIds || listingIds.has(store.getSubmission(submissionId)?.listingId ?? ""))
     },
-    async waitForIdle() { await Promise.all([...jobs.values(), ...preparations.values()]) },
+    async waitForIdle() {
+      await Promise.all([...[...jobs.values()].map((job) => job.done), ...preparations.values()])
+    },
   }
 }
 
