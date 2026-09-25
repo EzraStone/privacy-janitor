@@ -21,7 +21,7 @@ import { buildRedactionMap, redactText, redactListing } from "../src/scoring/red
 import type { Identity, Listing } from "../src/types.ts"
 
 let failures = 0
-function check(name, cond) {
+function check(name: string, cond: boolean) {
   if (cond) {
     console.log(`  ok    ${name}`)
   } else {
