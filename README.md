@@ -29,6 +29,10 @@ user data, live broker results, or live submissions are included in these reposi
 
 <p align="center"><a href="docs/demo/privacy-janitor-demo.mp4"><strong>▶ Watch the 33-second feature walkthrough</strong></a><br><sub>Profiles, scans, match review, risk ranking, approval gates, email confirmation, removal verification, and history.</sub></p>
 
+[![Match hints on the review cards, showing which details agree with the profile](docs/images/match-hints-demo.png)](docs/demo/match-hints-demo.mp4)
+
+<p align="center"><a href="docs/demo/match-hints-demo.mp4"><strong>▶ Watch the 41-second match-hints demo</strong></a><br><sub>How each review card shows which details match — and why a name and city alone never read as a strong match.</sub></p>
+
 ![PrivacyJanitor consent-based profile form filled with fictional demo data](docs/images/profile-form-demo.png)
 
 <p align="center"><sub><strong>Clear profile setup</strong> with explicit consent before any person is added.</sub></p>
