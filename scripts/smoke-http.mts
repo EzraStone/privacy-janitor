@@ -104,10 +104,13 @@ try {
     // Windows needs elevated rights for file symlinks; the directory case above still runs.
     if ((error as NodeJS.ErrnoException).code !== "EPERM") throw error
   }
-  const html = await (await fetch(base)).text()
+  const dashboard = await fetch(base)
+  // Opening a broker listing must not reveal that the visit came from here.
+  assert.equal(dashboard.headers.get("referrer-policy"), "no-referrer")
+  const html = await dashboard.text()
   assert.match(html, /Setup checks/)
   assert.match(html, /Recheck setup/)
-  console.log("Local HTTP checks passed: setup endpoint, origin protections, evidence jail, profile validation, synthetic profile, preflight rejection, dashboard render")
+  console.log("Local HTTP checks passed: setup endpoint, origin protections, evidence jail, profile validation, referrer policy, synthetic profile, preflight rejection, dashboard render")
 } finally {
   if (child.exitCode === null && !spawnFailed) child.kill()
   await exited.catch(() => {})

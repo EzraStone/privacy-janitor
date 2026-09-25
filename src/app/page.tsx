@@ -666,7 +666,7 @@ function ListingCard({
       {e.phones?.length ? <div>📞 {e.phones.slice(0, 2).join(" · ")}</div> : null}
       {e.age ? <div>👤 age {e.age}</div> : null}
       {e.relatives?.length ? <div>👥 {e.relatives.slice(0, 3).join(" · ")}</div> : null}
-      <a href={listing.url} target="_blank" className="link-std block truncate">
+      <a href={listing.url} target="_blank" rel="noopener noreferrer" className="link-std block truncate">
         {listing.url}
       </a>
       {onConfirm && onReject && (
