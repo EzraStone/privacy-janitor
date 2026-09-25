@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
         | "rescan"
         | "confirm-listing"
         | "reject-listing"
+        | "review-listing"
         | "delete-identity"
         | "reset-all"
       identity?: Partial<Identity>
@@ -91,15 +92,21 @@ export async function POST(req: NextRequest) {
         return ok({ started: true, resumed, identityId: body.identityId, runId: run.id })
       }
 
-      case "confirm-listing": {
+      case "confirm-listing":
+      case "reject-listing": {
         if (!body.listingId) return fail("listingId required")
-        store.setListingConfirmed(body.listingId, true)
+        if (!store.setListingConfirmed(body.listingId, body.action === "confirm-listing")) {
+          return fail("listing not found", 404)
+        }
         return ok({ done: true })
       }
 
-      case "reject-listing": {
+      case "review-listing": {
         if (!body.listingId) return fail("listingId required")
-        store.setListingConfirmed(body.listingId, false)
+        if (store.activeSubmission(body.listingId)) {
+          return fail("cancel or finish this listing's active request before reviewing it again", 409)
+        }
+        if (!store.returnListingToReview(body.listingId)) return fail("listing not found", 404)
         return ok({ done: true })
       }
 

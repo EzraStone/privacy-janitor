@@ -127,6 +127,27 @@ check(
   store.getPreparedOptOut("lst_s1")?.state.proxySessionId === preparedProxySessionId,
 )
 
+console.log("smoke: listing decisions can be revisited")
+// A misclicked "Not me" must not hide one of your own records for good, and a
+// misclicked "This is me" must not strand a stranger's record in your queue.
+const decided = (id: string, confirmedMine: boolean | null) => store.upsertListing({
+  id, brokerId: "fastpeoplesearch", identityId: "id_smoke1", url: `https://example.com/${id}`,
+  displayName: "Alice Doe", exposedData: {}, confirmedMine,
+  firstSeenAt: new Date().toISOString(), lastSeenAt: new Date().toISOString(),
+})
+decided("lst_rejected", false)
+check("a rejected listing returns to review",
+  store.returnListingToReview("lst_rejected") && store.getListing("lst_rejected")?.confirmedMine === null)
+decided("lst_confirmed", true)
+check("a confirmed listing with no request returns to review",
+  store.returnListingToReview("lst_confirmed") && store.getListing("lst_confirmed")?.confirmedMine === null)
+let inFlightRefused = false
+try { store.returnListingToReview("lst_s1") } catch { inFlightRefused = true }
+check("a listing with an active request keeps its decision",
+  inFlightRefused && store.getListing("lst_s1")?.confirmedMine === true)
+check("returning an unknown listing is reported", store.returnListingToReview("lst_missing") === false)
+check("confirming an unknown listing is reported", store.setListingConfirmed("lst_missing", true) === false)
+
 console.log("smoke: durable scan progress")
 const scan = store.createScanRun("id_smoke1", "rescan")
 scan.results.push({

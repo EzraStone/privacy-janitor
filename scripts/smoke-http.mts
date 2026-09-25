@@ -71,6 +71,9 @@ try {
   assert.deepEqual([tidied.fullName, tidied.city, tidied.stateCode], ["Jordan Example", "Chicago", "IL"])
   assert.deepEqual(tidied.relatives, ["Casey Example"], "blank relatives dropped, names trimmed")
   assert.equal((await post("/api/state", { action: "delete-identity", identityId: tidied.id })).status, 200)
+  for (const action of ["confirm-listing", "reject-listing", "review-listing"]) {
+    assert.equal((await post("/api/state", { action, listingId: "lst_missing" })).status, 404, `${action} reports unknown listings`)
+  }
   const scan = await post("/api/state", { action: "scan", identityId: identity.id })
   assert.equal(scan.status, 503, "missing setup rejected before creating a scan")
   assert.match((await scan.json()).error, /SOLARI_API_KEY/)

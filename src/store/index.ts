@@ -752,8 +752,35 @@ export function recordBrokerScanObservation(input: {
   }
 }
 
-export function setListingConfirmed(id: string, confirmed: boolean): void {
-  open().prepare("UPDATE listings SET confirmed_mine = ? WHERE id = ?").run(confirmed ? 1 : 0, id)
+/** Record a "This is me" / "Not me" decision. False if there is no such listing. */
+export function setListingConfirmed(id: string, confirmed: boolean): boolean {
+  return open().prepare("UPDATE listings SET confirmed_mine = ? WHERE id = ?").run(confirmed ? 1 : 0, id).changes === 1
+}
+
+/**
+ * Send a listing back to review so a misclicked decision can be corrected.
+ * Review is the safest state: nothing can be prepared or submitted from it.
+ * Refused while a broker action is active, so a decision never changes under
+ * an in-flight request. False if there is no such listing.
+ */
+export function returnListingToReview(id: string): boolean {
+  const db = open()
+  db.exec("BEGIN IMMEDIATE")
+  try {
+    if (!getListing(id)) {
+      db.exec("COMMIT")
+      return false
+    }
+    if (activeSubmission(id)) {
+      throw new Error("cancel or finish this listing's active request before reviewing it again")
+    }
+    db.prepare("UPDATE listings SET confirmed_mine = NULL WHERE id = ?").run(id)
+    db.exec("COMMIT")
+    return true
+  } catch (error) {
+    db.exec("ROLLBACK")
+    throw error
+  }
 }
 
 // ── submissions ─────────────────────────────────────────────────────────────
