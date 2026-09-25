@@ -37,7 +37,9 @@ user data, live broker results, or live submissions are included in these reposi
 
 1. **Add a profile** — use your own details or those of someone who authorized you.
 2. **Scan and review** — search the supported brokers, then confirm which listings are yours.
-   A misclicked decision can go back to review until a removal request is sent.
+   Each card notes which details match your profile; name and city alone are flagged as
+   something a namesake could share. A misclicked decision can go back to review until a
+   removal request is sent.
 3. **Rank exposure (optional)** — send tokenized listing fields to Groq for a suggested priority.
    The report you read shows your real values again, restored on this machine.
 4. **Preview and approve** — inspect the filled form before authorizing the removal request.
