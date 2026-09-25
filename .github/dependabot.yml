@@ -5,6 +5,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # Node types track the oldest runtime we support (engines: >=24). Newer
+      # majors would typecheck calls to APIs that Node 24 does not have.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   # Workflow actions go stale silently: v4 of checkout/setup-node kept running
   # on a deprecated Node 20 until GitHub started forcing Node 24.
   - package-ecosystem: github-actions
