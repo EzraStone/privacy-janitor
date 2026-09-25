@@ -42,6 +42,8 @@ user data, live broker results, or live submissions are included in these reposi
    The report you read shows your real values again, restored on this machine.
 4. **Preview and approve** — inspect the filled form before authorizing the removal request.
 5. **Confirm and recheck** — complete the broker's email step, then run a later rescan.
+   If the email never arrives, close the attempt and start again; if a rescan still finds
+   the listing after your request, you can request removal again.
 
 ### Built for review, not blind automation
 
