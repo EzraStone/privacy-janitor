@@ -345,6 +345,15 @@ export async function waitForAny(
 }
 
 /** Standardized match scoring shared by adapters. */
+function nameWords(name: string): string[] {
+  return name
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}']+/u)
+    .filter(Boolean)
+}
+
 export function scoreMatch(
   displayName: string,
   identityName: string,
@@ -354,10 +363,14 @@ export function scoreMatch(
   extras?: { age?: string; ageRange?: string; relatives?: string[]; listingRelatives?: string[] },
 ): number {
   let score = 0
-  const name = displayName.toLowerCase()
-  const wanted = identityName.toLowerCase()
-  if (name === wanted) score += 0.4
-  else if (name.includes(wanted) || wanted.includes(name)) score += 0.25
+  // Compare names as words, not substrings: a middle initial ("Jordan A
+  // Example") still matches, a fragment ("Jo") does not, and accents a broker
+  // stripped ("Jose" for "José") are folded away on both sides.
+  const shown = nameWords(displayName)
+  const wanted = nameWords(identityName)
+  const covers = (all: string[], some: string[]) => some.length > 0 && some.every((w) => all.includes(w))
+  if (shown.length > 0 && shown.join(" ") === wanted.join(" ")) score += 0.4
+  else if (covers(shown, wanted) || covers(wanted, shown)) score += 0.25
 
   // A two-letter state code is a word, not a substring: "ma" is inside
   // "main", "ca" inside "chicago", "il" inside "hill".

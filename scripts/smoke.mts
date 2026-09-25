@@ -85,6 +85,14 @@ check("CA is not matched inside Chicago", stateOnly("9 Oak Ave, Chicago, IL", "F
 check("a Springfield MA namesake on Hill St is not a Springfield IL match",
   stateOnly("4 Hill St, Springfield, MA", "Springfield", "IL") === 0)
 check("a same-state address still earns state credit", stateOnly("7 Elm St, Peoria, IL 61602", "Chicago", "IL") > 0)
+// Names compare as words. A middle initial is the most common broker display
+// variant and must still count; a short fragment of the name must not.
+const nameOnly = (shown: string, wanted: string) => scoreMatch(shown, wanted, [], "Chicago", "IL")
+check("a middle initial still earns name credit", nameOnly("Jordan A Example", "Jordan Example") > 0)
+check("a fragment of the name earns nothing", nameOnly("Jo", "Jordan Example") === 0)
+check("case and spacing do not block an exact match", nameOnly("  JORDAN   example ", "Jordan Example") === nameOnly("Jordan Example", "Jordan Example"))
+check("accents stripped by a broker still match exactly", nameOnly("Jose Garcia", "José García") === nameOnly("José García", "José García"))
+check("a surname alone keeps partial credit", nameOnly("Example", "Jordan Example") > 0)
 
 console.log("smoke: PII redaction")
 const identity = {
