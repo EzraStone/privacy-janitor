@@ -78,6 +78,8 @@ try {
   assert.deepEqual([tidied.fullName, tidied.city, tidied.stateCode], ["Jordan Example", "Chicago", "IL"])
   assert.deepEqual(tidied.relatives, ["Casey Example"], "blank relatives dropped, names trimmed")
   assert.equal((await post("/api/state", { action: "delete-identity", identityId: tidied.id })).status, 200)
+  const reopen = await fetch(`${base}/api/actions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "reopen-removal" }) })
+  assert.equal(reopen.status, 400, "reopen-removal requires the exact attempt")
   for (const action of ["confirm-listing", "reject-listing", "review-listing"]) {
     assert.equal((await post("/api/state", { action, listingId: "lst_missing" })).status, 404, `${action} reports unknown listings`)
   }

@@ -9,10 +9,11 @@ const transitions: Record<SubmissionStatus, SubmissionStatus[]> = {
   prepared: ["approved", "cancelled"],
   approved: ["submitting", "failed", "cancelled"],
   submitting: ["awaiting_email", "submitted", "attention_required"],
-  submitted: ["removed"],
+  // A sent request the broker ignored may be closed so a new one can be made.
+  submitted: ["removed", "failed"],
   awaiting_email: ["confirming"],
   confirming: ["confirmed", "attention_required"],
-  confirmed: ["removed"],
+  confirmed: ["removed", "failed"],
   attention_required: ["approved", "confirming", "cancelled"],
   removed: [],
   failed: [],

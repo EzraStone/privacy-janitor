@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
         | "prepare-optout"
         | "approve-optout"
         | "cancel-optout"
+        | "reopen-removal"
         | "confirm-email"
         | "score"
       listingId?: string
@@ -48,6 +49,11 @@ export async function POST(req: NextRequest) {
       case "cancel-optout": {
         if (!body.listingId || !body.submissionId) return fail("listingId and submissionId required")
         return ok({ submission: store.cancelSubmission(body.listingId, body.submissionId) })
+      }
+
+      case "reopen-removal": {
+        if (!body.listingId || !body.submissionId) return fail("listingId and submissionId required")
+        return ok({ submission: store.reopenIgnoredRemoval(body.listingId, body.submissionId) })
       }
 
       case "confirm-email": {

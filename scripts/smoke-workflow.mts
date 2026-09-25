@@ -194,6 +194,27 @@ try {
   assert.equal(failed.results[0]?.outcome, "inconclusive")
   assert.equal(failed.results[0]?.evidenceDir, join(directory, "scan-whitepages"), "a failed session keeps its evidence path")
   console.log("ok: scan findings and evidence survive browser teardown failures")
+
+  // Brokers can ignore a request that was sent and even confirmed. Once a
+  // rescan has seen the listing again after it, the user may ask again.
+  listing("ignored")
+  const ignored = await service.prepare("ignored", "jordan@example.com")
+  service.approve("ignored", ignored.id)
+  await service.waitForIdle()
+  service.confirm("ignored", ignored.id, "https://www.spokeo.com/confirm?test=synthetic")
+  await service.waitForIdle()
+  assert.equal(store.getSubmission(ignored.id)?.status, "confirmed")
+  assert.equal((await service.prepare("ignored", "jordan@example.com")).id, ignored.id,
+    "a confirmed request blocks any new attempt until it is reopened")
+  assert.throws(() => store.reopenIgnoredRemoval("ignored", ignored.id), /rescan/, "not before a rescan sees it again")
+  store.upsertListing({ ...store.getListing("ignored")!, lastSeenAt: new Date(Date.now() + 1000).toISOString() })
+  const reopened = store.reopenIgnoredRemoval("ignored", ignored.id)
+  assert.equal(reopened.status, "failed")
+  assert.match(reopened.lastError ?? "", /still listed/i)
+  const retry = await service.prepare("ignored", "jordan@example.com")
+  assert.notEqual(retry.id, ignored.id, "a fresh attempt can be prepared")
+  store.cancelSubmission("ignored", retry.id)
+  console.log("ok: a removal the broker ignored can be requested again after a rescan")
 } finally {
   await service.waitForIdle()
   store.closeDb()

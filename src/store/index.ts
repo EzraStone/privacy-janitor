@@ -1074,6 +1074,26 @@ export function requireCurrentSubmission(listingId: string, submissionId: string
   return sub
 }
 
+/**
+ * Close a sent request the broker evidently ignored, so a new one can be
+ * prepared. Brokers take days to act and sometimes never do; only a rescan
+ * that saw the listing again after this request lets the user make that call.
+ */
+export function reopenIgnoredRemoval(listingId: string, submissionId: string): Submission {
+  const sub = requireCurrentSubmission(listingId, submissionId)
+  if (sub.status !== "submitted" && sub.status !== "confirmed") {
+    throw new Error("only a request that was sent to the broker can be reopened")
+  }
+  const listing = getListing(listingId)
+  if (!listing || listing.presenceStatus === "absent" || listing.lastSeenAt <= sub.updatedAt) {
+    throw new Error("rescan first: reopen only if the listing is still visible after this request")
+  }
+  transitionSubmission(sub.id, sub.status, "failed", {
+    lastError: "Still listed after this request; the broker has not removed it yet.",
+  })
+  return getSubmission(sub.id)!
+}
+
 export function cancelSubmission(listingId: string, submissionId: string): Submission {
   const sub = requireCurrentSubmission(listingId, submissionId)
   if (sub.status === "cancelled") return sub
