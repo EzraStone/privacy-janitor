@@ -5,3 +5,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+  # Workflow actions go stale silently: v4 of checkout/setup-node kept running
+  # on a deprecated Node 20 until GitHub started forcing Node 24.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
