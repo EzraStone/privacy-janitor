@@ -16,24 +16,34 @@ export function containsProviderKey(text: string): boolean {
     /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(text)
 }
 
-export function checkIndex(): number {
-  const paths = execFileSync("git", ["ls-files", "--cached", "-z"], { encoding: "utf8" }).split("\0").filter(Boolean)
+/** Index entries with Git's own text/binary verdict, read without loading content. */
+function indexEntries(cwd: string): Array<{ path: string; binary: boolean }> {
+  return execFileSync("git", ["ls-files", "--cached", "--eol", "-z"], { cwd, encoding: "utf8" })
+    .split("\0")
+    .filter(Boolean)
+    .map((entry) => ({ path: entry.slice(entry.indexOf("\t") + 1), binary: entry.startsWith("i/-text") }))
+}
+
+export function checkIndex(cwd = process.cwd()): number {
+  const entries = indexEntries(cwd)
   const failures: string[] = []
-  for (const path of paths) {
+  for (const { path, binary } of entries) {
     if (blockedArtifact(path)) {
       failures.push(`${path}: runtime or environment file must not be committed`)
       continue
     }
-    // Media cannot be inspected for PII here. Human review remains mandatory.
-    if (!/\.(?:[cm]?[jt]sx?|json|md|ya?ml|txt|example|toml|css)$/.test(path)) continue
-    const content = execFileSync("git", ["show", `:${path}`], { encoding: "utf8", maxBuffer: 8 * 1024 * 1024 })
+    // Every text file is read, whatever its extension: a key pasted into a
+    // shell script leaks as surely as one in TypeScript. Media cannot be
+    // inspected for PII here. Human review remains mandatory.
+    if (binary) continue
+    const content = execFileSync("git", ["show", `:${path}`], { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
     if (containsProviderKey(content)) failures.push(`${path}: possible credential (value withheld)`)
   }
   if (failures.length) {
     for (const failure of failures) console.error(failure)
     return 1
   }
-  console.log(`Repository guard: ${paths.length} indexed paths checked; no known runtime artifacts or provider keys found.`)
+  console.log(`Repository guard: ${entries.length} indexed paths checked; no known runtime artifacts or provider keys found.`)
   console.log("This does not audit arbitrary personal data, image/video contents, or Git history.")
   return 0
 }
