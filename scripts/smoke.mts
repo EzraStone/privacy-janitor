@@ -100,6 +100,23 @@ check("case and spacing do not block an exact match", nameOnly("  JORDAN   examp
 check("accents stripped by a broker still match exactly", nameOnly("Jose Garcia", "José García") === nameOnly("José García", "José García"))
 check("a surname alone keeps partial credit", nameOnly("Example", "Jordan Example") > 0)
 
+// Every adapter must score namesakes with the shared scorer, not a stale copy
+// of it: Whitepages once matched "MA" inside "Main St" and gave a middle
+// initial no name credit, long after the shared scorer was fixed.
+const wpNow = new Date().toISOString()
+const wpPerson: Identity = { id: "wp", fullName: "Jordan Example", city: "Boston", stateCode: "MA", createdAt: wpNow }
+const wpListing = (displayName: string, address: string): Listing => ({
+  id: "wp-l", brokerId: "whitepages", identityId: "wp", url: "https://www.whitepages.com/x",
+  displayName, exposedData: { addresses: [address] }, confirmedMine: null, firstSeenAt: wpNow, lastSeenAt: wpNow,
+})
+for (const adapter of adapters) {
+  for (const [shown, address] of [["Jordan Example", "12 Main St, Austin, TX"], ["Jordan A Example", "9 Elm St, Boston, MA"]]) {
+    check(`${adapter.id} scores "${shown}" at "${address}" like the shared scorer`,
+      adapter.verifyMatch(wpListing(shown, address), wpPerson) ===
+        scoreMatch(shown, wpPerson.fullName, [address], wpPerson.city, wpPerson.stateCode, {}))
+  }
+}
+
 console.log("smoke: profile URL slugs")
 // Slugs are ASCII and hyphen-joined, so a surname can lose its accents,
 // apostrophe or own hyphen on the way into the URL — and still be the person.

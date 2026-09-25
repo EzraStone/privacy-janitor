@@ -177,32 +177,19 @@ export const whitepages: BrokerAdapter = {
   // ── match confidence ─────────────────────────────────────────────────────
 
   verifyMatch(listing, identity): number {
-    let score = 0
-    const name = listing.displayName.toLowerCase()
-    const wanted = identity.fullName.toLowerCase()
-    if (name === wanted) score += 0.4
-    else if (name.includes(wanted) || wanted.includes(name)) score += 0.25
-
-    const addrs = listing.exposedData.addresses ?? []
-    const state = identity.stateCode.toLowerCase()
-    const city = identity.city.toLowerCase()
-    if (addrs.some((a) => a.toLowerCase().includes(city) && a.toLowerCase().includes(state)))
-      score += 0.3
-    else if (addrs.some((a) => a.toLowerCase().includes(state))) score += 0.15
-
-    if (listing.exposedData.age && identity.ageRange) {
-      const age = parseInt(listing.exposedData.age, 10)
-      const [lo, hi] = identity.ageRange.split("-").map((x) => parseInt(x, 10))
-      if (age >= lo && age <= hi) score += 0.2
-    }
-
-    if (identity.relatives?.length && listing.exposedData.relatives?.length) {
-      const mine = identity.relatives.map((r) => r.toLowerCase().split(" ")[0])
-      const theirs = listing.exposedData.relatives.map((r) => r.toLowerCase().split(" ")[0])
-      if (mine.some((m) => theirs.includes(m))) score += 0.1
-    }
-
-    return Math.min(score, 1)
+    return scoreMatch(
+      listing.displayName,
+      identity.fullName,
+      listing.exposedData.addresses ?? [],
+      identity.city,
+      identity.stateCode,
+      {
+        age: listing.exposedData.age,
+        ageRange: identity.ageRange,
+        relatives: identity.relatives,
+        listingRelatives: listing.exposedData.relatives,
+      },
+    )
   },
 
   // ── opt-out: prepare (fills, screenshots, does NOT submit) ────────────────
