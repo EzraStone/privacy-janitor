@@ -18,57 +18,46 @@ export interface RedactionMap {
   valueToToken: Map<string, string>
 }
 
+type TokenKind = "LOCATION" | "NAME" | "RELATIVE" | "ADDR" | "PHONE" | "EMAIL"
+
 /** Build the token map for an identity + its listings. */
 export function buildRedactionMap(identity: Identity, listings: Listing[]): RedactionMap {
-  const values = new Set<string>()
-
-  values.add(identity.fullName)
-  values.add(identity.city)
-  values.add(identity.stateCode)
-  identity.relatives?.forEach((r) => values.add(r))
+  // Each value is typed by the field it came from, never guessed from its
+  // content: a ZIP code made full addresses look like phone numbers, and a
+  // relative named "Lane" looked like a street. The first field to claim a
+  // value decides its type, so the profile's city and state stay LOCATION
+  // when they reappear inside an address.
+  const typed: Array<[string, TokenKind]> = [
+    [identity.fullName, "NAME"],
+    [identity.city, "LOCATION"],
+    [identity.stateCode, "LOCATION"],
+  ]
+  identity.relatives?.forEach((r) => typed.push([r, "RELATIVE"]))
 
   for (const l of listings) {
-    values.add(l.displayName)
+    typed.push([l.displayName, "NAME"])
+    l.exposedData.aliases?.forEach((a) => typed.push([a, "NAME"]))
+    l.exposedData.relatives?.forEach((r) => typed.push([r, "RELATIVE"]))
     l.exposedData.addresses?.forEach((a) => {
-      values.add(a)
+      typed.push([a, "ADDR"])
       // Also register each comma-separated segment so PARTIAL addresses
       // ("742 Evergreen Terrace") redact even when the full value with
       // city/state doesn't appear verbatim.
-      a.split(",").map((s) => s.trim()).filter((s) => s.length > 3).forEach((seg) => values.add(seg))
+      a.split(",").map((s) => s.trim()).filter((s) => s.length > 3).forEach((seg) => typed.push([seg, "ADDR"]))
     })
-    l.exposedData.phones?.forEach((p) => values.add(p))
-    l.exposedData.emails?.forEach((e) => values.add(e))
-    l.exposedData.relatives?.forEach((r) => values.add(r))
-    l.exposedData.aliases?.forEach((a) => values.add(a))
+    l.exposedData.phones?.forEach((p) => typed.push([p, "PHONE"]))
+    l.exposedData.emails?.forEach((e) => typed.push([e, "EMAIL"]))
   }
 
   const tokenToValue = new Map<string, string>()
   const valueToToken = new Map<string, string>()
-  let nameN = 0
-  let addrN = 0
-  let phoneN = 0
-  let emailN = 0
-  let locationN = 0
-  let relN = 0
+  const counts: Record<TokenKind, number> = { LOCATION: 0, NAME: 0, RELATIVE: 0, ADDR: 0, PHONE: 0, EMAIL: 0 }
 
-  for (const v of values) {
-    const key = v.toLowerCase()
+  for (const [value, kind] of typed) {
+    const key = value.toLowerCase()
     if (valueToToken.has(key)) continue
-    let token: string
-    if (v === identity.city || v === identity.stateCode) {
-      token = `[LOCATION_${++locationN}]`
-    } else if (v === identity.fullName || identity.relatives?.includes(v)) {
-      token = `[NAME_${++nameN}]`
-    } else if (/[\d]/.test(v) && v.replace(/\D/g, "").length >= 7) {
-      token = `[PHONE_${++phoneN}]`
-    } else if (v.includes("@")) {
-      token = `[EMAIL_${++emailN}]`
-    } else if (/\b(st|street|ave|avenue|rd|road|dr|drive|blvd|ln|lane|ct|court|city|state|terrace|way|place|plaza|pkwy|highway|loop|circle|trail|apt|unit)\b/i.test(v)) {
-      token = `[ADDR_${++addrN}]`
-    } else {
-      token = `[RELATIVE_${++relN}]` // fall back: relative-ish names
-    }
-    tokenToValue.set(token, v)
+    const token = `[${kind}_${++counts[kind]}]`
+    tokenToValue.set(token, value)
     valueToToken.set(key, token)
   }
 

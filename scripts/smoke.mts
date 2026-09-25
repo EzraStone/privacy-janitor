@@ -205,6 +205,40 @@ check(
   redactText("awaiting confirmation", map) === "awaiting confirmation",
 )
 
+console.log("smoke: redaction token types follow the source field")
+// Types come from the field a value was found in, never from its content: a
+// ZIP code made every full address look like a phone number, and a relative
+// named "Lane" looked like a street. A wrong type reaches the model and comes
+// back to the user in its rationale ("phone 742 Evergreen Terrace...").
+const typedIdentity: Identity = {
+  id: "id_typed", fullName: "Jordan Example", city: "Chicago", stateCode: "IL",
+  relatives: ["Casey Example"], createdAt: new Date().toISOString(),
+}
+const typedListing: Listing = {
+  id: "lst_typed", brokerId: "spokeo", identityId: typedIdentity.id, url: "https://www.spokeo.com/x",
+  displayName: "Jordan A Example", confirmedMine: true,
+  firstSeenAt: new Date().toISOString(), lastSeenAt: new Date().toISOString(),
+  exposedData: {
+    addresses: ["742 Evergreen Terrace, Springfield, IL 62704", "PO Box 1234, Chicago, IL"],
+    phones: ["(312) 555-0100"], emails: ["jordan@example.com"],
+    relatives: ["Lane Example", "Casey Example"], aliases: ["J. Example"],
+  },
+}
+const typedLines = new Map(
+  redactListing(typedListing, buildRedactionMap(typedIdentity, [typedListing]))
+    .split("\n").map((line) => [line.split(":")[0], line] as const),
+)
+const onlyTokens = (field: string, kind: string) => {
+  const tokens = typedLines.get(field)?.match(/\[[A-Z]+_\d+\]/g) ?? []
+  return tokens.length > 0 && tokens.every((token) => token.startsWith(`[${kind}_`))
+}
+check("addresses with ZIP codes are ADDR, not PHONE", onlyTokens("addresses", "ADDR"))
+check("relatives are RELATIVE, even one named Lane", onlyTokens("relatives_listed", "RELATIVE"))
+check("display name variants are the subject's NAME", onlyTokens("display_name", "NAME"))
+check("aliases are the subject's NAME", onlyTokens("aliases", "NAME"))
+check("phones are PHONE", onlyTokens("phones", "PHONE"))
+check("emails are EMAIL", onlyTokens("emails", "EMAIL"))
+
 console.log("smoke: scoring parser tolerance")
 // simulate the safeParseJson fallback path with fences
 const fenced = '```json\n{"rankings":[],"summary":"ok"}\n```'
