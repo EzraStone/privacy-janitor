@@ -186,6 +186,13 @@ export default function Home() {
   )
   const activeScan = scopedScans.find((s) => !s.finishedAt)
   const latestRescan = scopedScans.find((s) => s.kind === "rescan")
+  // Rescan events cover every record on each broker. Name the listing each one
+  // is about (brokers often hold several per person), and leave out records
+  // already marked as someone else.
+  const rescanChanges = (latestRescan?.events ?? []).flatMap((event) => {
+    const listing = scopedListings.find((l) => l.id === event.listingId)
+    return listing?.confirmedMine === false ? [] : [{ event, listing }]
+  })
 
   return (
     <main className="mx-auto max-w-6xl space-y-8 px-5 py-12 sm:px-8 sm:py-16">
@@ -510,13 +517,15 @@ export default function Home() {
                   ? "incomplete — review broker warnings"
                   : "complete"}
               </div>
-              {latestRescan.events.length === 0 ? (
-                <p className="text-zinc-500">No listing changes were recorded.</p>
+              {rescanChanges.length === 0 ? (
+                <p className="text-zinc-500">No changes to your listings were recorded.</p>
               ) : (
                 <div className="space-y-1 text-zinc-400">
-                  {latestRescan.events.map((event) => (
+                  {rescanChanges.map(({ event, listing }) => (
                     <div key={`${event.brokerId}-${event.listingId}-${event.type}`}>
-                      {event.brokerId}: {event.type.replaceAll("_", " ")}
+                      {event.brokerId}: {listing?.displayName ?? "a listing"}
+                      {listing?.exposedData.addresses?.[0] ? ` (${listing.exposedData.addresses[0]})` : ""}
+                      {" — "}{event.type.replaceAll("_", " ")}
                     </div>
                   ))}
                 </div>
