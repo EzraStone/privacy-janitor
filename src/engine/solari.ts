@@ -120,6 +120,24 @@ export async function launchResilient(
   }
 }
 
+/** The evidence folder and screenshot writer for one broker session.
+ *  Screenshots are images of a real person's broker listings: owner-only. */
+export function createRunEvidence(runId: string, stickySessionId: string): RunEvidence {
+  const evidenceDir = join(getEvidenceDir(), runId)
+  mkdirSync(evidenceDir, { recursive: true, mode: 0o700 })
+  return {
+    runId,
+    evidenceDir,
+    proxySessionId: stickySessionId,
+    stealth: false,
+    screenshot: (name: string, png: Buffer) => {
+      const p = join(evidenceDir, `${name}.png`)
+      writeFileSync(p, png, { mode: 0o600 })
+      return p
+    },
+  }
+}
+
 /**
  * Run a broker flow inside a stealth session with guaranteed cleanup.
  * The callback receives a real Playwright page; everything it does is
@@ -136,23 +154,9 @@ export async function withBrokerSession<T>(
 ): Promise<{ result: T; evidence: RunEvidence }> {
   const client = getSolariClient()
   const runId = `${flowName}-${Date.now().toString(36)}`
-  const stickySessionId = proxySessionId(options.proxySessionId ?? runId)
-  const evidenceDir = join(getEvidenceDir(), runId)
-  mkdirSync(evidenceDir, { recursive: true })
+  const evidence = createRunEvidence(runId, proxySessionId(options.proxySessionId ?? runId))
 
-  const evidence: RunEvidence = {
-    runId,
-    evidenceDir,
-    proxySessionId: stickySessionId,
-    stealth: false,
-    screenshot: (name: string, png: Buffer) => {
-      const p = join(evidenceDir, `${name}.png`)
-      writeFileSync(p, png)
-      return p
-    },
-  }
-
-  const { browser, stealth } = await launchResilient(client, stickySessionId)
+  const { browser, stealth } = await launchResilient(client, evidence.proxySessionId)
 
   evidence.sessionId = browser.id
   evidence.stealth = stealth

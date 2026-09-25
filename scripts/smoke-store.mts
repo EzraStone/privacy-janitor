@@ -92,6 +92,13 @@ console.log("smoke: local data is owner-only")
 if (process.platform !== "win32") {
   check("an existing world-readable database is tightened on open",
     (statSync(join(tempRoot, "privacy-janitor.db")).mode & 0o077) === 0)
+  // Screenshots are images of a real person's broker listings.
+  const { createRunEvidence } = await import("../src/engine/solari.ts")
+  const run = createRunEvidence("scan-permissions-1", "pin")
+  const shot = run.screenshot("scan-result-state", Buffer.from("synthetic"))
+  check("the evidence folder is owner-only", (statSync(paths.getEvidenceDir()).mode & 0o077) === 0)
+  check("a run folder is owner-only", (statSync(run.evidenceDir).mode & 0o077) === 0)
+  check("a screenshot is owner-only", (statSync(shot).mode & 0o077) === 0)
 }
 
 console.log("smoke: listings + submissions scoping")
