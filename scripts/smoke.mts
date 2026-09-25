@@ -16,11 +16,12 @@ import {
   classifyBrokerScan,
   isNoResultText,
   isPersonProfileSlug,
+  requireProfileName,
   scoreMatch,
 } from "../src/adapters/helpers.ts"
 import { buildRedactionMap, redactText, redactListing } from "../src/scoring/redact.ts"
 import { parseExposureReport } from "../src/scoring/index.ts"
-import type { Identity, Listing } from "../src/types.ts"
+import type { BrokerPage, Identity, Listing } from "../src/types.ts"
 
 let failures = 0
 function check(name: string, cond: boolean) {
@@ -110,6 +111,20 @@ check("a percent-encoded slug is decoded", slugMatches("Jos%C3%A9-Garc%C3%ADa", 
 check("a different surname does not match", !slugMatches("Jordan-Examples", "Jordan Example"))
 check("a different first name does not match", !slugMatches("Pat-Example", "Jordan Example"))
 check("the surname cannot consume the first name", !slugMatches("Smith-Jones", "Mary Smith-Jones"))
+
+console.log("smoke: profile heading verification")
+// The profile heading is where a broker proves the page is about this person;
+// brokers often print names without the accents the profile was saved with.
+const headed = (heading: string) => ({
+  locator: () => ({ first: () => ({ isVisible: async () => true, innerText: async () => heading }) }),
+}) as unknown as BrokerPage
+const verifies = (heading: string, fullName: string) =>
+  requireProfileName(headed(heading), { fullName }).then(() => true, () => false)
+check("a matching heading verifies", await verifies("Jordan Example", "Jordan Example"))
+check("a heading without the profile's accents verifies", await verifies("Jose Garcia", "José García"))
+check("an accented heading verifies an ASCII profile", await verifies("José García", "Jose Garcia"))
+check("a hyphenated surname heading verifies", await verifies("Mary Smith-Jones, 42", "Mary Smith-Jones"))
+check("a different surname does not verify", !(await verifies("Jordan Sample", "Jordan Example")))
 
 console.log("smoke: PII redaction")
 const identity = {

@@ -216,8 +216,9 @@ export async function requireProfileName(
 ): Promise<string> {
   const body = ((await tryInnerText(page, "body")) ?? "").toLowerCase()
   const heading = await tryInnerText(page, "h1")
-  const tokens: string[] = (heading ?? "").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
-  const wanted: string[] = identity.fullName.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
+  // Fold accents on both sides: brokers print "Garcia" for "García".
+  const tokens: string[] = foldName(heading ?? "").match(/[\p{L}\p{N}]+/gu) ?? []
+  const wanted: string[] = foldName(identity.fullName).match(/[\p{L}\p{N}]+/gu) ?? []
   if (!heading || CHALLENGE_MARKERS.some((marker) => body.includes(marker)) ||
       /loading|not found|unavailable/i.test(heading) || wanted.length < 2 ||
       !tokens.includes(wanted.at(-1)!) || !tokens.some((token) => token.startsWith(wanted[0].slice(0, 2)))) {
