@@ -3,7 +3,7 @@ import { ok, fail, failFromError, readJson } from "../_lib"
 import * as store from "@/store"
 import { resumeIncompleteScans, startScan } from "@/engine/orchestrator"
 import { optOuts } from "@/engine/optouts"
-import { removeEvidencePaths } from "@/engine/cleanup"
+import { listEvidenceEntries, removeEvidencePaths } from "@/engine/cleanup"
 import type { Identity } from "@/types"
 import { assertTrustedLocalRequest } from "@/security/requests"
 import { keyStatus, requireScanSetup } from "@/config/setup"
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
           return fail("wait for active scans and broker actions to finish before resetting local data", 409)
         }
         const { evidenceDirs } = store.resetAll()
-        const filesRemoved = removeEvidencePaths(evidenceDirs)
+        const filesRemoved = removeEvidencePaths([...evidenceDirs, ...listEvidenceEntries()])
         return ok({ done: true, evidenceCleaned: filesRemoved })
       }
 

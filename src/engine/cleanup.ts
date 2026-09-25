@@ -6,9 +6,9 @@
  * the jail compares physical locations — a symlinked directory inside the
  * evidence tree cannot be used to reach a file outside it.
  */
-import { lstatSync, realpathSync, rmSync } from "node:fs"
+import { lstatSync, readdirSync, realpathSync, rmSync } from "node:fs"
 import { basename, dirname, join, resolve } from "node:path"
-import { isInsideEvidenceDir } from "../config/paths.ts"
+import { getEvidenceDir, isInsideEvidenceDir } from "../config/paths.ts"
 
 /** Resolve symlinks in every component but the last. The jail must see where
  *  a path really lands, while rmSync still removes a final symlink itself
@@ -73,4 +73,19 @@ export function removeEvidencePaths(paths: string[]): number {
     }
   }
   return removed
+}
+
+/**
+ * Every entry directly under the evidence root. "Reset all" promises to delete
+ * all evidence, and after it the database references nothing — so anything
+ * still here lost its reference (a failed session, a legacy row) and would
+ * never be found by reference-based cleanup. Each entry still passes the jail.
+ */
+export function listEvidenceEntries(): string[] {
+  const root = getEvidenceDir()
+  try {
+    return readdirSync(root).map((name) => join(root, name))
+  } catch {
+    return []
+  }
 }

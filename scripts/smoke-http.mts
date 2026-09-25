@@ -2,7 +2,7 @@
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
 import { createRequire } from "node:module"
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { once } from "node:events"
@@ -117,7 +117,14 @@ try {
   const html = await dashboard.text()
   assert.match(html, /Setup checks/)
   assert.match(html, /Recheck setup/)
-  console.log("Local HTTP checks passed: setup endpoint, origin protections, request shapes, evidence jail, profile validation, referrer policy, synthetic profile, preflight rejection, dashboard render")
+  // "Reset all" promises to delete all evidence, including files whose
+  // database reference was lost; reference-based cleanup never finds those.
+  mkdirSync(join(evidence, "orphaned-run"))
+  writeFileSync(join(evidence, "orphaned-run", "scan-result-state.png"), "synthetic orphan")
+  assert.equal((await post("/api/state", { action: "reset-all" })).status, 200)
+  assert.deepEqual(readdirSync(evidence), [], "reset leaves no evidence behind")
+  assert.equal(readFileSync(join(outside, "secret.txt"), "utf8"), "never served", "reset never follows a link outside the jail")
+  console.log("Local HTTP checks passed: setup endpoint, origin protections, request shapes, evidence jail, profile validation, referrer policy, synthetic profile, preflight rejection, dashboard render, full reset")
 } finally {
   if (child.exitCode === null && !spawnFailed) child.kill()
   await exited.catch(() => {})
