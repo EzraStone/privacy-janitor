@@ -470,11 +470,26 @@ export function explainMatch(
   if ([age, lo, hi].every(Number.isFinite)) explanation.age = age >= lo && age <= hi ? "fits" : "outside"
 
   if (extras?.relatives?.length && extras?.listingRelatives?.length) {
-    const mine = extras.relatives.map((r) => r.toLowerCase().split(" ")[0])
-    const theirs = extras.listingRelatives.map((r) => r.toLowerCase().split(" ")[0])
-    explanation.relatives = mine.some((m) => theirs.includes(m)) ? "shared" : "none_shared"
+    const theirs = extras.listingRelatives.map(nameWords)
+    explanation.relatives = extras.relatives.map(nameWords)
+      .some((mine) => theirs.some((listed) => sameRelative(mine, listed))) ? "shared" : "none_shared"
   }
   return explanation
+}
+
+/**
+ * Same first name and, when both names carry one, a compatible surname: a
+ * shared surname word ("Casey Example-Smith"), or a surname a broker cut to
+ * its initial ("Casey E"). A first name alone is too common to count, and a
+ * middle initial is not a surname ("Michael J Smith" is not "Michael Johnson").
+ */
+function sameRelative(a: string[], b: string[]): boolean {
+  if (a.length === 0 || a[0] !== b[0]) return false
+  if (a.length === 1 || b.length === 1) return true
+  const surnames = (words: string[]) => words.slice(1).filter((word) => word.length > 1)
+  const initialOf = (short: string, long: string) => short.length === 1 && long.startsWith(short)
+  return surnames(a).some((word) => surnames(b).includes(word)) ||
+    initialOf(a.at(-1)!, b.at(-1)!) || initialOf(b.at(-1)!, a.at(-1)!)
 }
 
 /** A stored listing against its profile, the way every current adapter reads it. */

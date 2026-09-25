@@ -622,7 +622,7 @@ function IdentityForm({
         <input className="input-std" placeholder="25-30" value={ageRange} onChange={(e) => setAgeRange(e.target.value)} />
       </label>
       <label className="field-label sm:col-span-2">
-        Relatives <span className="font-normal text-muted">Optional, comma-separated</span>
+        Relatives <span className="font-normal text-muted">Optional, full names, comma-separated</span>
         <input
           className="input-std"
           placeholder="Improves match accuracy"
@@ -688,7 +688,7 @@ function matchDetails(m: MatchExplanation): Array<[string, string]> {
           : ["–", "No address listed"],
   ]
   if (m.age) details.push(m.age === "fits" ? ["✓", "Age fits your profile’s range"] : ["✗", "Age outside your profile’s range"])
-  if (m.relatives) details.push(m.relatives === "shared" ? ["✓", "Shares a relative’s first name"] : ["–", "No relatives in common"])
+  if (m.relatives) details.push(m.relatives === "shared" ? ["✓", "Shares a relative’s name"] : ["–", "No relatives in common"])
   return details
 }
 

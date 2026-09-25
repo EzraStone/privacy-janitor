@@ -134,6 +134,16 @@ check("contradicting details are reported",
 const sparse = explainMatch("Jordan Example", "Jordan Example", [], "Chicago", "IL", { age: "42" })
 check("missing details stay unknown, never a mismatch",
   sparse.place === "none_listed" && sparse.age === undefined && sparse.relatives === undefined)
+// A shared relative can earn a listing the strongest hint, so a common first
+// name alone must not count: a namesake's page lists a "Michael" often enough.
+const relativesOf = (mine: string, theirs: string) => explainMatch("Jordan Example", "Jordan Example", [], "Chicago", "IL",
+  { relatives: [mine], listingRelatives: [theirs] }).relatives
+check("a shared first name alone is not a shared relative", relativesOf("Michael Smith", "Michael Johnson") === "none_shared")
+check("a middle initial is not a surname initial", relativesOf("Michael J Smith", "Michael Johnson") === "none_shared")
+check("a surname shortened to its initial still matches", relativesOf("José Example", "Jose E.") === "shared")
+check("a middle name or initial still matches", relativesOf("Casey Example", "Casey L. Example") === "shared")
+check("a hyphenated surname still matches", relativesOf("Casey Example", "Casey Example-Smith") === "shared")
+check("a relative given by first name matches on first name", relativesOf("Casey", "Casey Jones") === "shared")
 check("the score is derived from the explanation", scoreMatch("Jordan Example", "Jordan Example",
   ["742 Evergreen Terrace, Chicago, IL"], "Chicago", "IL",
   { age: "42", ageRange: "40-45", relatives: ["Casey Example"], listingRelatives: ["Casey E"] }) === matchScore(explained))

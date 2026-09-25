@@ -127,6 +127,7 @@ try {
   assert.match(await headline("hint-namesake"), /so would a namesake’s/)
   assert.match(await headline("hint-contra"), /may be someone else/)
   assert.match(await headline("hint-sparse"), /Too few details/)
+  assert.match(await card(page, "hint-strong").innerText(), /✓\s*Shares a relative’s name/)
   assert.match(await card(page, "hint-sparse").innerText(), /–\s*No address listed/, "unknown shows as –, not ✗")
   console.log("ok: review cards explain which details match")
   assert.deepEqual(await wcagViolations(page), [], "dashboard meets WCAG 2.1 AA")
