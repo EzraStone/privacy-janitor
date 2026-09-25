@@ -845,6 +845,12 @@ function OptOutRow({
               {busy === `e-${listing.id}` ? "Confirming…" : "Confirm removal"}
             </button>
           </div>
+          {sub.status === "awaiting_email" && (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+              <span>No email after a day or two? Check spam first; confirmation links can also expire.</span>
+              <button className="btn-secondary" disabled={!!busy} onClick={onCancel}>Close attempt locally</button>
+            </div>
+          )}
         </div>
       )}
 
