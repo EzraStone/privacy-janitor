@@ -181,6 +181,9 @@ export default function Home() {
   const pendingListings = scopedListings.filter(
     (l) => l.confirmedMine === null && l.presenceStatus !== "absent",
   )
+  const rejectedListings = scopedListings.filter(
+    (l) => l.confirmedMine === false && l.presenceStatus !== "absent",
+  )
   const activeScan = scopedScans.find((s) => !s.finishedAt)
   const latestRescan = scopedScans.find((s) => s.kind === "rescan")
 
@@ -368,6 +371,24 @@ export default function Home() {
         </section>
       )}
 
+      {identity && rejectedListings.length > 0 && (
+        <details className="panel space-y-4">
+          <summary className="cursor-pointer text-sm text-zinc-400">
+            Marked not you ({rejectedListings.length})
+          </summary>
+          <p className="text-sm leading-6 text-zinc-500">
+            Clicked “Not me” by mistake? Send the listing back to review.
+          </p>
+          <div className="grid gap-4 md:grid-cols-2">
+            {rejectedListings.map((l) => (
+              <ListingCard key={l.id} listing={l}
+                onReviewAgain={() => void stateAction({ action: "review-listing", listingId: l.id }, `r-${l.id}`)}
+              />
+            ))}
+          </div>
+        </details>
+      )}
+
       {/* ── Exposure score ──────────────────────────────────────────── */}
       {identity && presentConfirmedListings.length > 0 && (
         <section className="panel space-y-4">
@@ -457,6 +478,7 @@ export default function Home() {
                   onApprove={(retryAcknowledged = false) => void action({ action: "approve-optout", listingId: l.id, submissionId: sub?.id, retryAcknowledged }, `a-${l.id}`)}
                   onCancel={() => void action({ action: "cancel-optout", listingId: l.id, submissionId: sub?.id }, `x-${l.id}`)}
                   onConfirmEmail={(retryAcknowledged = false) => void action({ action: "confirm-email", listingId: l.id, submissionId: sub?.id, confirmationUrl: confirmUrl[l.id], retryAcknowledged }, `e-${l.id}`)}
+                  onReviewAgain={() => void stateAction({ action: "review-listing", listingId: l.id }, `r-${l.id}`)}
                 />
               )
             })}
@@ -628,11 +650,12 @@ function IdentityForm({
 }
 
 function ListingCard({
-  listing, onConfirm, onReject,
+  listing, onConfirm, onReject, onReviewAgain,
 }: {
   listing: Listing
   onConfirm?: () => void
   onReject?: () => void
+  onReviewAgain?: () => void
 }) {
   const e = listing.exposedData
   return (
@@ -652,13 +675,16 @@ function ListingCard({
           <button className="btn-secondary" onClick={onReject}>Not me</button>
         </div>
       )}
+      {onReviewAgain && (
+        <button className="btn-secondary" onClick={onReviewAgain}>Review again</button>
+      )}
     </div>
   )
 }
 
 function OptOutRow({
   listing, sub, busy, remoteReady, contactEmail, confirmUrl, onConfirmUrlChange,
-  onPrepare, onApprove, onCancel, onConfirmEmail,
+  onPrepare, onApprove, onCancel, onConfirmEmail, onReviewAgain,
 }: {
   listing: Listing
   sub?: Submission
@@ -671,6 +697,7 @@ function OptOutRow({
   onApprove: (retryAcknowledged?: boolean) => void
   onCancel: () => void
   onConfirmEmail: (retryAcknowledged?: boolean) => void
+  onReviewAgain: () => void
 }) {
   const [retryAcknowledged, setRetryAcknowledged] = useState(false)
   useEffect(() => setRetryAcknowledged(false), [sub?.id, sub?.status])
@@ -715,6 +742,13 @@ function OptOutRow({
             : isRelisted
               ? "Prepare another opt-out"
               : "Prepare opt-out"}
+        </button>
+      )}
+
+      {/* Only before any request: once one is sent, the decision is on record. */}
+      {(!sub || sub.status === "failed" || sub.status === "cancelled") && !isAbsent && (
+        <button className="btn-secondary ml-2" disabled={!!busy} onClick={onReviewAgain}>
+          Not me after all
         </button>
       )}
 
