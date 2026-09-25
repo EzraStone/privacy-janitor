@@ -170,7 +170,8 @@ export interface BrokerAdapter {
   scan(page: BrokerPage, identity: Identity): Promise<BrokerScanObservation>
 
   /** How likely is it that this listing is the identity (vs a namesake)?
-   *  0..1. Engine combines with user confirmation. */
+   *  0..1. Not yet consulted by the engine or dashboard: every listing is
+   *  shown for the user to confirm, unscored. */
   verifyMatch(listing: Listing, identity: Identity): MatchConfidence
 
   /** Drive the broker's opt-out form up to (but NOT including) the final
