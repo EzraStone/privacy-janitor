@@ -723,6 +723,17 @@ function OptOutRow({
 
       {sub?.lastError && <div className="border-l border-white/30 pl-3 text-xs text-zinc-400">{sub.lastError}</div>}
 
+      {/* The recorded sessions are the evidence for what the broker actually saw. */}
+      {(sub?.submitSessionId || sub?.confirmSessionId) && (
+        <p className="text-xs text-zinc-500">
+          Recorded Solari sessions —{" "}
+          {[
+            sub.submitSessionId && `submit ${sub.submitSessionId}`,
+            sub.confirmSessionId && `confirm ${sub.confirmSessionId}`,
+          ].filter(Boolean).join(" · ")}
+        </p>
+      )}
+
       {sub?.previewScreenshotPath && (
         <div className="space-y-1">
           <p className="text-zinc-400">
