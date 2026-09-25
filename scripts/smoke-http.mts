@@ -2,7 +2,7 @@
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
 import { createRequire } from "node:module"
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { once } from "node:events"
@@ -120,6 +120,10 @@ try {
   const html = await dashboard.text()
   assert.match(html, /Setup checks/)
   assert.match(html, /Recheck setup/)
+  // The database holds broker records about a real person: owner-only.
+  if (process.platform !== "win32") {
+    assert.equal(statSync(join(directory, "privacy-janitor.db")).mode & 0o077, 0, "a fresh database is owner-only")
+  }
   // "Reset all" promises to delete all evidence, including files whose
   // database reference was lost; reference-based cleanup never finds those.
   mkdirSync(join(evidence, "orphaned-run"))

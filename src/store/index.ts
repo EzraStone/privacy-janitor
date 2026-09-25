@@ -7,7 +7,7 @@
  * native-build dependencies — `npm install` just works on any OS.
  */
 import { DatabaseSync } from "node:sqlite"
-import { mkdirSync } from "node:fs"
+import { chmodSync, closeSync, mkdirSync, openSync } from "node:fs"
 import { dirname } from "node:path"
 import { getDatabasePath } from "../config/paths.ts"
 import { activeSubmissionStatuses, canTransition } from "../engine/submission-state.ts"
@@ -35,7 +35,12 @@ const g = globalThis as unknown as { __pjDb?: DatabaseSync }
 
 function open(): DatabaseSync {
   if (g.__pjDb) return g.__pjDb
-  mkdirSync(dirname(DB_PATH), { recursive: true })
+  // Broker records about a real person: owner-only, like a credential store.
+  // Create the file before SQLite does (its journal copies the database's
+  // mode), and tighten a database an older version left world-readable.
+  mkdirSync(dirname(DB_PATH), { recursive: true, mode: 0o700 })
+  closeSync(openSync(DB_PATH, "a", 0o600))
+  chmodSync(DB_PATH, 0o600)
   const db = new DatabaseSync(DB_PATH)
   migrate(db)
   g.__pjDb = db

@@ -5,7 +5,7 @@
  * Run: node --experimental-strip-types scripts/smoke-store.mts
  */
 import "dotenv/config"
-import { existsSync, mkdtempSync, rmSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, rmSync, mkdirSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
@@ -85,6 +85,14 @@ store.saveIdentity(id1)
 store.saveIdentity(id2)
 check("save + list roundtrip", store.listIdentities().length === 2)
 check("get by id", store.getIdentity("id_smoke1")?.fullName === "Alice Doe")
+
+console.log("smoke: local data is owner-only")
+// This suite's database was created by an older schema with default,
+// world-readable permissions; opening it must tighten that.
+if (process.platform !== "win32") {
+  check("an existing world-readable database is tightened on open",
+    (statSync(join(tempRoot, "privacy-janitor.db")).mode & 0o077) === 0)
+}
 
 console.log("smoke: listings + submissions scoping")
 store.upsertListing({
