@@ -54,6 +54,9 @@ export function buildRedactionMap(identity: Identity, listings: Listing[]): Reda
   const counts: Record<TokenKind, number> = { LOCATION: 0, NAME: 0, RELATIVE: 0, ADDR: 0, PHONE: 0, EMAIL: 0 }
 
   for (const [value, kind] of typed) {
+    // Profiles saved before server-side trimming can hold blank values; a
+    // blank key would become an empty pattern that matches at every position.
+    if (!value.trim()) continue
     const key = value.toLowerCase()
     if (valueToToken.has(key)) continue
     const token = `[${kind}_${++counts[kind]}]`

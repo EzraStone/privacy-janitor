@@ -239,6 +239,13 @@ check("aliases are the subject's NAME", onlyTokens("aliases", "NAME"))
 check("phones are PHONE", onlyTokens("phones", "PHONE"))
 check("emails are EMAIL", onlyTokens("emails", "EMAIL"))
 
+// Profiles saved before server-side trimming can hold blank values. A blank
+// key would compile to an empty pattern and splice a token between every
+// character of the prompt.
+const legacy: Identity = { ...typedIdentity, city: "", relatives: ["", "Casey Example"] }
+const legacyText = redactText("Casey Example lives near Chicago", buildRedactionMap(legacy, []))
+check("blank legacy values never inject tokens", legacyText === "[RELATIVE_1] lives near Chicago")
+
 console.log("smoke: scoring parser tolerance")
 // simulate the safeParseJson fallback path with fences
 const fenced = '```json\n{"rankings":[],"summary":"ok"}\n```'
