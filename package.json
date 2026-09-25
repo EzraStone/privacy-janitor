@@ -20,7 +20,8 @@
     "doctor": "node scripts/run-doctor.mjs",
     "smoke:setup": "node --experimental-strip-types scripts/smoke-setup.mts",
     "smoke:http": "node --experimental-strip-types scripts/smoke-http.mts",
-    "check": "npm run typecheck && npm run smoke && npm run smoke:store && npm run smoke:security && npm run smoke:workflow && npm run smoke:adapters && npm run smoke:privacy && npm run smoke:setup && npm run check:repo && npm run build && npm run smoke:http"
+    "smoke:ui": "node --experimental-strip-types scripts/smoke-ui.mts",
+    "check": "npm run typecheck && npm run smoke && npm run smoke:store && npm run smoke:security && npm run smoke:workflow && npm run smoke:adapters && npm run smoke:privacy && npm run smoke:setup && npm run check:repo && npm run build && npm run smoke:http && npm run smoke:ui"
   },
   "dependencies": {
     "@solarisdk/browser": "^0.1.3",
@@ -35,6 +36,7 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "playwright-core": "^1.63.0",
     "tailwindcss": "^4.1.0",
     "typescript": "^5.8.0"
   }

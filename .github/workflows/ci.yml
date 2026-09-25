@@ -26,6 +26,9 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
 
+      - name: Install Chromium for dashboard UI checks
+        run: npx playwright-core install --with-deps chromium
+
       - name: Verify application
         run: npm run check
 

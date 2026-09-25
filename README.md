@@ -162,11 +162,15 @@ npm run smoke:adapters  # real adapters against synthetic selector fixtures
 npm run smoke:privacy   # repository guard and redaction regression checks
 npm run smoke:setup     # configuration, storage, and unsupported-plan checks
 npm run smoke:http      # built app on loopback with an isolated synthetic profile
+npm run smoke:ui        # dashboard in Chromium: match hints, undo, request states, framing
 npm run doctor          # local setup diagnostics; no provider calls
 npm run check:repo      # inspect indexed paths/content, without printing key values
 npm run check           # all checks plus production build
 npm audit --omit=dev    # current dependency advisories
 ```
+
+`smoke:ui` needs Chromium: run `npx playwright-core install chromium` once, or set
+`PJ_UI_CHROMIUM` to an existing Chrome binary. Without one it skips locally; CI always runs it.
 
 The other diagnostic scripts under `scripts/` may contact providers and brokers. Read them
 before running; they are not part of the offline test suite and may incur charges or save
