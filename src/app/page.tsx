@@ -486,6 +486,7 @@ export default function Home() {
                   onCancel={() => void action({ action: "cancel-optout", listingId: l.id, submissionId: sub?.id }, `x-${l.id}`)}
                   onConfirmEmail={(retryAcknowledged = false) => void action({ action: "confirm-email", listingId: l.id, submissionId: sub?.id, confirmationUrl: confirmUrl[l.id], retryAcknowledged }, `e-${l.id}`)}
                   onReviewAgain={() => void stateAction({ action: "review-listing", listingId: l.id }, `r-${l.id}`)}
+                  onReopen={() => void action({ action: "reopen-removal", listingId: l.id, submissionId: sub?.id }, `o-${l.id}`)}
                 />
               )
             })}
@@ -693,7 +694,7 @@ function ListingCard({
 
 function OptOutRow({
   listing, sub, busy, remoteReady, contactEmail, confirmUrl, onConfirmUrlChange,
-  onPrepare, onApprove, onCancel, onConfirmEmail, onReviewAgain,
+  onPrepare, onApprove, onCancel, onConfirmEmail, onReviewAgain, onReopen,
 }: {
   listing: Listing
   sub?: Submission
@@ -707,6 +708,7 @@ function OptOutRow({
   onCancel: () => void
   onConfirmEmail: (retryAcknowledged?: boolean) => void
   onReviewAgain: () => void
+  onReopen: () => void
 }) {
   const [retryAcknowledged, setRetryAcknowledged] = useState(false)
   useEffect(() => setRetryAcknowledged(false), [sub?.id, sub?.status])
@@ -767,6 +769,20 @@ function OptOutRow({
               ? "Prepare another opt-out"
               : "Prepare opt-out"}
         </button>
+      )}
+
+      {/* A sent request the broker ignored: a rescan saw the listing again since. */}
+      {(sub?.status === "submitted" || sub?.status === "confirmed") && !isAbsent &&
+        listing.lastSeenAt > sub.updatedAt && (
+        <div className="space-y-2 border-l border-white/30 pl-3">
+          <p className="text-zinc-400">
+            A rescan still found this listing after your request. Brokers can take several
+            days to remove records; if it is still here after that, request removal again.
+          </p>
+          <button className="btn-secondary" disabled={!!busy} onClick={onReopen}>
+            Request removal again
+          </button>
+        </div>
       )}
 
       {/* Only before any request: once one is sent, the decision is on record. */}
