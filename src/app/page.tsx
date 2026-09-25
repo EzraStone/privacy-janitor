@@ -725,7 +725,11 @@ function OptOutRow({
 
       {sub?.previewScreenshotPath && (
         <div className="space-y-1">
-          <p className="text-zinc-400">Filled form preview — approve before we submit:</p>
+          <p className="text-zinc-400">
+            {sub.status === "prepared"
+              ? "Filled form preview — approve before we submit:"
+              : "Form preview from this request:"}
+          </p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`/api/evidence?file=${encodeURIComponent(sub.previewScreenshotPath.replace(/\\/g, "/"))}`}
