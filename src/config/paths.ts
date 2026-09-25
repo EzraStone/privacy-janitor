@@ -1,4 +1,5 @@
-import { join, resolve } from "node:path"
+import { realpathSync } from "node:fs"
+import { isAbsolute, join, relative, resolve, sep } from "node:path"
 
 /** Single source of truth for every local runtime-data path. */
 export function getDataDir(): string {
@@ -13,4 +14,22 @@ export function getDatabasePath(): string {
 
 export function getEvidenceDir(): string {
   return join(getDataDir(), "evidence")
+}
+
+/**
+ * True if `physical` — a path whose symlinks the caller has already resolved —
+ * lies strictly inside the evidence directory, never the directory itself.
+ * Both sides are compared physically, so a symlinked data root (macOS /var is
+ * /private/var) still matches, and a symlink planted inside the evidence tree
+ * cannot reach outside it.
+ */
+export function isInsideEvidenceDir(physical: string): boolean {
+  let root: string
+  try {
+    root = realpathSync(getEvidenceDir())
+  } catch {
+    return false
+  }
+  const child = relative(root, physical)
+  return child !== "" && child !== ".." && !child.startsWith(`..${sep}`) && !isAbsolute(child)
 }

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
 import { createRequire } from "node:module"
-import { mkdtempSync, rmSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { once } from "node:events"
@@ -60,10 +60,33 @@ try {
   assert.equal(pending.identities.length, 1, "profiles usable before provider setup")
   assert.deepEqual(pending.scans, [], "failed preflight must not create phantom jobs")
   assert.equal((await post("/api/state", { action: "reset-all" }, { origin: "https://unrelated.invalid" })).status, 403)
+  const evidence = join(directory, "evidence")
+  const evidenceStatus = async (file: string) =>
+    (await fetch(`${base}/api/evidence?file=${encodeURIComponent(file)}`)).status
+  mkdirSync(join(evidence, "run-1"), { recursive: true })
+  writeFileSync(join(evidence, "run-1", "shot.png"), "synthetic png")
+  const shot = await fetch(`${base}/api/evidence?file=${encodeURIComponent(join(evidence, "run-1", "shot.png"))}`)
+  assert.equal(shot.status, 200)
+  assert.equal(shot.headers.get("content-type"), "image/png")
+  assert.equal(await evidenceStatus(join(evidence, "run-1", "missing.png")), 404)
+  assert.equal(await evidenceStatus("../privacy-janitor.db"), 403)
+  // A symlink inside the evidence tree must not serve a file from outside it.
+  const outside = join(directory, "outside")
+  mkdirSync(outside)
+  writeFileSync(join(outside, "secret.txt"), "never served")
+  symlinkSync(outside, join(evidence, "linked-dir"), "junction")
+  assert.equal(await evidenceStatus(join(evidence, "linked-dir", "secret.txt")), 403, "directory symlink escape")
+  try {
+    symlinkSync(join(outside, "secret.txt"), join(evidence, "linked.png"), "file")
+    assert.equal(await evidenceStatus(join(evidence, "linked.png")), 403, "file symlink escape")
+  } catch (error) {
+    // Windows needs elevated rights for file symlinks; the directory case above still runs.
+    if ((error as NodeJS.ErrnoException).code !== "EPERM") throw error
+  }
   const html = await (await fetch(base)).text()
   assert.match(html, /Setup checks/)
   assert.match(html, /Recheck setup/)
-  console.log("Local HTTP checks passed: setup endpoint, origin protections, synthetic profile, preflight rejection, dashboard render")
+  console.log("Local HTTP checks passed: setup endpoint, origin protections, evidence jail, synthetic profile, preflight rejection, dashboard render")
 } finally {
   if (child.exitCode === null && !spawnFailed) child.kill()
   await exited.catch(() => {})

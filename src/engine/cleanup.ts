@@ -7,14 +7,8 @@
  * evidence tree cannot be used to reach a file outside it.
  */
 import { lstatSync, realpathSync, rmSync } from "node:fs"
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
-import { getEvidenceDir } from "../config/paths.ts"
-
-/** Evidence root — honors PJ_DATA_DIR (same override as the store) so tests
- *  jail against the same root the store writes to. */
-function evidenceRoot(): string {
-  return getEvidenceDir()
-}
+import { basename, dirname, join, resolve } from "node:path"
+import { isInsideEvidenceDir } from "../config/paths.ts"
 
 /** Resolve symlinks in every component but the last. The jail must see where
  *  a path really lands, while rmSync still removes a final symlink itself
@@ -30,16 +24,8 @@ function physicalPath(target: string): string | undefined {
 /** True if target is strictly INSIDE the evidence root (never the root
  *  itself — one bad path must never nuke the whole evidence tree). */
 function isJailed(target: string): boolean {
-  let root: string
-  try {
-    root = realpathSync(evidenceRoot())
-  } catch {
-    return false
-  }
   const physical = physicalPath(resolve(target))
-  if (!physical) return false
-  const child = relative(root, physical)
-  return child !== "" && child !== ".." && !child.startsWith(`..${sep}`) && !isAbsolute(child)
+  return physical !== undefined && isInsideEvidenceDir(physical)
 }
 
 /**
