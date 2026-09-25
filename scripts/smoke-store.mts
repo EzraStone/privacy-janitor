@@ -5,7 +5,7 @@
  * Run: node --experimental-strip-types scripts/smoke-store.mts
  */
 import "dotenv/config"
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, rmSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
@@ -321,6 +321,20 @@ writeFileSync(join(tempRoot, "evidence", "run-1", "shot.png"), "x")
 check("jailed path removed", cleanup.removeEvidencePath(join(tempRoot, "evidence", "run-1")) === true)
 check("outside path refused", cleanup.removeEvidencePath(join(tmpdir(), "some-other-file.txt")) === false)
 check("evidence root itself refused", cleanup.removeEvidencePath(join(tempRoot, "evidence")) === false)
+
+// A lexically-jailed path can still escape through a symlinked directory:
+// evidence/linked/secret.txt resolves outside the jail if "linked" points out.
+const outside = join(tempRoot, "outside")
+mkdirSync(outside, { recursive: true })
+writeFileSync(join(outside, "secret.txt"), "must survive")
+symlinkSync(outside, join(tempRoot, "evidence", "linked"), "junction")
+check(
+  "path through a symlink out of the jail is refused",
+  cleanup.removeEvidencePath(join(tempRoot, "evidence", "linked", "secret.txt")) === false,
+)
+check("file outside the jail survives", existsSync(join(outside, "secret.txt")))
+check("removing the symlink itself succeeds", cleanup.removeEvidencePath(join(tempRoot, "evidence", "linked")) === true)
+check("removing the symlink never deletes its target", existsSync(join(outside, "secret.txt")))
 
 store.closeDb()
 try {

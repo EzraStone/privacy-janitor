@@ -2,12 +2,12 @@
  * Local evidence cleanup — deletes screenshot files/folders produced by
  * broker runs when the owning identity is deleted.
  *
- * SECURITY: every path is resolved and jailed under data/evidence before
- * deletion. No user input can ever make this remove a file outside the
- * evidence directory.
+ * SECURITY: every path is jailed under data/evidence before deletion, and
+ * the jail compares physical locations — a symlinked directory inside the
+ * evidence tree cannot be used to reach a file outside it.
  */
-import { rmSync, statSync } from "node:fs"
-import { isAbsolute, relative, resolve, sep } from "node:path"
+import { lstatSync, realpathSync, rmSync } from "node:fs"
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { getEvidenceDir } from "../config/paths.ts"
 
 /** Evidence root — honors PJ_DATA_DIR (same override as the store) so tests
@@ -16,12 +16,29 @@ function evidenceRoot(): string {
   return getEvidenceDir()
 }
 
+/** Resolve symlinks in every component but the last. The jail must see where
+ *  a path really lands, while rmSync still removes a final symlink itself
+ *  rather than whatever it points to. */
+function physicalPath(target: string): string | undefined {
+  try {
+    return join(realpathSync(dirname(target)), basename(target))
+  } catch {
+    return undefined
+  }
+}
+
 /** True if target is strictly INSIDE the evidence root (never the root
  *  itself — one bad path must never nuke the whole evidence tree). */
 function isJailed(target: string): boolean {
-  const root = evidenceRoot()
-  const resolved = resolve(target)
-  const child = relative(root, resolved)
+  let root: string
+  try {
+    root = realpathSync(evidenceRoot())
+  } catch {
+    return false
+  }
+  const physical = physicalPath(resolve(target))
+  if (!physical) return false
+  const child = relative(root, physical)
   return child !== "" && child !== ".." && !child.startsWith(`..${sep}`) && !isAbsolute(child)
 }
 
@@ -32,14 +49,15 @@ function isJailed(target: string): boolean {
 export function removeEvidencePath(path: string): boolean {
   if (!path) return false
   const resolved = resolve(path)
+  try {
+    // lstat, not stat: a dangling symlink still exists and can be removed.
+    lstatSync(resolved)
+  } catch {
+    return false // already gone
+  }
   if (!isJailed(resolved)) {
     console.warn(`[cleanup] refusing to delete outside data/evidence: ${path}`)
     return false
-  }
-  try {
-    statSync(resolved)
-  } catch {
-    return false // already gone
   }
   try {
     rmSync(resolved, { recursive: true, force: true })
