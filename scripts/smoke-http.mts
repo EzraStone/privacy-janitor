@@ -53,6 +53,24 @@ try {
   const saved = await post("/api/state", { action: "save-identity", identity: { fullName: "Jordan Example", city: "Chicago", stateCode: "IL" } })
   assert.equal(saved.status, 200)
   const { identity } = await saved.json()
+  // Profile fields are validated after trimming: a lone space passes an HTML
+  // "required" check, and a blank value later corrupts the scoring prompt.
+  const saveStatus = async (fields: Record<string, unknown>) => (await post("/api/state", {
+    action: "save-identity", identity: { fullName: "Jordan Example", city: "Chicago", stateCode: "IL", ...fields },
+  })).status
+  assert.equal(await saveStatus({ city: "   " }), 400, "whitespace-only city rejected")
+  assert.equal(await saveStatus({ fullName: " " }), 400, "whitespace-only name rejected")
+  assert.equal(await saveStatus({ stateCode: "Illinois" }), 400, "state must be a two-letter code")
+  assert.equal(await saveStatus({ relatives: "Casey Example" }), 400, "relatives must be a list")
+  assert.equal(await saveStatus({ relatives: ["Casey", 7] }), 400, "relatives must be names")
+  const tidy = await post("/api/state", { action: "save-identity", identity: {
+    fullName: "  Jordan Example ", city: " Chicago", stateCode: "il ", relatives: ["  ", " Casey Example "],
+  } })
+  assert.equal(tidy.status, 200)
+  const tidied = (await tidy.json()).identity
+  assert.deepEqual([tidied.fullName, tidied.city, tidied.stateCode], ["Jordan Example", "Chicago", "IL"])
+  assert.deepEqual(tidied.relatives, ["Casey Example"], "blank relatives dropped, names trimmed")
+  assert.equal((await post("/api/state", { action: "delete-identity", identityId: tidied.id })).status, 200)
   const scan = await post("/api/state", { action: "scan", identityId: identity.id })
   assert.equal(scan.status, 503, "missing setup rejected before creating a scan")
   assert.match((await scan.json()).error, /SOLARI_API_KEY/)
@@ -86,7 +104,7 @@ try {
   const html = await (await fetch(base)).text()
   assert.match(html, /Setup checks/)
   assert.match(html, /Recheck setup/)
-  console.log("Local HTTP checks passed: setup endpoint, origin protections, evidence jail, synthetic profile, preflight rejection, dashboard render")
+  console.log("Local HTTP checks passed: setup endpoint, origin protections, evidence jail, profile validation, synthetic profile, preflight rejection, dashboard render")
 } finally {
   if (child.exitCode === null && !spawnFailed) child.kill()
   await exited.catch(() => {})

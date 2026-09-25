@@ -48,16 +48,28 @@ export async function POST(req: NextRequest) {
     switch (body.action) {
       case "save-identity": {
         const i = body.identity
-        if (!i?.fullName || !i?.city || !i?.stateCode) {
+        // Trim before requiring: a lone space passes an HTML "required" check,
+        // and a blank value later matches everywhere when redacting prompts.
+        const text = (value: unknown) => (typeof value === "string" ? value.trim() : "")
+        const fullName = text(i?.fullName)
+        const city = text(i?.city)
+        const stateCode = text(i?.stateCode).toUpperCase()
+        if (!i || !fullName || !city || !stateCode) {
           return fail("fullName, city, and stateCode are required")
         }
+        if (!/^[A-Z]{2}$/.test(stateCode)) return fail("stateCode must be a two-letter state code")
+        if (i.relatives !== undefined &&
+          (!Array.isArray(i.relatives) || !i.relatives.every((r) => typeof r === "string"))) {
+          return fail("relatives must be a list of names")
+        }
+        const relatives = i.relatives?.map((r) => r.trim()).filter(Boolean)
         const identity: Identity = {
           id: i.id ?? `id_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-          fullName: i.fullName.trim(),
-          city: i.city.trim(),
-          stateCode: i.stateCode.trim().toUpperCase(),
-          ageRange: i.ageRange?.trim() || undefined,
-          relatives: i.relatives,
+          fullName,
+          city,
+          stateCode,
+          ageRange: text(i.ageRange) || undefined,
+          relatives: relatives?.length ? relatives : undefined,
           createdAt: i.createdAt ?? new Date().toISOString(),
         }
         store.saveIdentity(identity)
