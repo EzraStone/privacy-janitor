@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* Tertiary text. Tailwind's zinc-500 (4.2:1) and zinc-600 (2.6:1) fall short
+   of WCAG AA's 4.5:1 on these dark surfaces; this is the dimmest zinc-tinted
+   grey that clears it on each (#000 5.0:1, panels 4.8:1), keeping it a tier
+   below zinc-400. */
+@theme {
+  --color-muted: #7b7b85;
+}
+
 @layer base {
   * {
     @apply border-white/10;
@@ -18,7 +26,7 @@
     @apply rounded-xl border border-white/10 bg-black p-4;
   }
   .eyebrow {
-    @apply text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500;
+    @apply text-[11px] font-semibold uppercase tracking-[0.22em] text-muted;
   }
   .btn-primary {
     @apply rounded-lg border border-white bg-white px-4 py-2 text-sm font-semibold text-black
@@ -31,7 +39,7 @@
   }
   .btn-danger {
     @apply rounded-lg border border-dashed border-white/20 bg-transparent px-4 py-2 text-sm
-      font-medium text-zinc-500 transition hover:border-white/50 hover:text-white
+      font-medium text-muted transition hover:border-white/50 hover:text-white
       disabled:cursor-not-allowed
       disabled:opacity-40;
   }

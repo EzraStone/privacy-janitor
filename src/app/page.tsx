@@ -200,9 +200,9 @@ export default function Home() {
       <header className="border-b border-white/10 pb-10">
         <p className="eyebrow mb-4">Local-first privacy workspace</p>
         <h1 className="text-4xl font-semibold tracking-[-0.04em] sm:text-6xl">
-          Privacy<span className="font-light text-zinc-500">Janitor</span>
+          Privacy<span className="font-light text-muted">Janitor</span>
         </h1>
-        <p className="mt-4 max-w-2xl text-sm leading-6 text-zinc-500">
+        <p className="mt-4 max-w-2xl text-sm leading-6 text-muted">
           Profiles, findings, and evidence are saved locally in{" "}
           <code className="rounded bg-white/5 px-1.5 py-0.5 text-zinc-300">data/</code>.
           Searches and form previews send details to Solari and the broker sites.
@@ -287,7 +287,7 @@ export default function Home() {
                 }
               >
                 {i.fullName}
-                <span className={i.id === activeIdentityId ? "text-black/60" : "text-zinc-600"}>
+                <span className={i.id === activeIdentityId ? "text-black/60" : "text-muted"}>
                   {" "}
                   · {i.city}, {i.stateCode}
                 </span>
@@ -324,7 +324,7 @@ export default function Home() {
         )}
 
         {state?.identities.length === 0 && (
-          <p className="text-sm leading-6 text-zinc-500">
+          <p className="text-sm leading-6 text-muted">
             No profiles yet — add the person whose data-broker listings you want to find and
             remove. (You can manage multiple people: yourself, family members with their
             consent, etc.)
@@ -339,7 +339,7 @@ export default function Home() {
             <div>
               <p className="eyebrow">02 / Scan</p>
               <h2 className="mt-1 text-xl font-semibold tracking-tight">Scan for {identity.fullName}</h2>
-              <p className="mt-1 text-sm text-zinc-500">
+              <p className="mt-1 text-sm text-muted">
                 Searches all brokers for this profile&apos;s data.
               </p>
             </div>
@@ -352,7 +352,7 @@ export default function Home() {
             </button>
           </div>
           {activeScan && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted">
               Scan running — results stream in below as each broker finishes (polling every 4s).
             </p>
           )}
@@ -364,7 +364,7 @@ export default function Home() {
         <section className="panel space-y-4">
           <p className="eyebrow">03 / Review matches</p>
           <h2 className="text-xl font-semibold tracking-tight">Is this {identity.fullName}?</h2>
-          <p className="text-sm leading-6 text-zinc-500">
+          <p className="text-sm leading-6 text-muted">
             Confirm each listing before anything is removed — namesakes are common and wrong
             removals cause real trouble. Each card notes which details match your profile;
             the hints never decide for you.
@@ -385,7 +385,7 @@ export default function Home() {
           <summary className="cursor-pointer text-sm text-zinc-400">
             Marked not you ({rejectedListings.length})
           </summary>
-          <p className="text-sm leading-6 text-zinc-500">
+          <p className="text-sm leading-6 text-muted">
             Clicked “Not me” by mistake? Send the listing back to review.
           </p>
           <div className="grid gap-4 md:grid-cols-2">
@@ -419,7 +419,7 @@ export default function Home() {
               <p className="text-sm text-zinc-300">
                 Overall exposure:{" "}
                 <span className="font-bold text-white">{report.totalScore}/100</span>
-                <span className="text-zinc-500"> · model {report.model}</span>
+                <span className="text-muted"> · model {report.model}</span>
               </p>
               <p className="text-sm text-zinc-400">{report.summary}</p>
               <div className="space-y-2">
@@ -437,7 +437,7 @@ export default function Home() {
                   )
                 })}
               </div>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-muted">
                 Optional Groq scoring receives tokenized listing and profile-location fields;
                 redaction reduces disclosure but does not guarantee anonymity. Skip scoring
                 if you do not want to send this information to Groq.
@@ -501,7 +501,7 @@ export default function Home() {
         <section className="panel space-y-3">
           <p className="eyebrow">06 / Verify</p>
           <h2 className="text-xl font-semibold tracking-tight">Verify removals</h2>
-          <p className="text-sm leading-6 text-zinc-500">
+          <p className="text-sm leading-6 text-muted">
             Brokers relist data. Re-run the scan after a few days — removed listings that
             reappear get flagged. A blocked or unfamiliar broker page is reported as
             inconclusive and never counted as a removal.
@@ -521,7 +521,7 @@ export default function Home() {
                   : "complete"}
               </div>
               {rescanChanges.length === 0 ? (
-                <p className="text-zinc-500">No changes to your listings were recorded.</p>
+                <p className="text-muted">No changes to your listings were recorded.</p>
               ) : (
                 <div className="space-y-1 text-zinc-400">
                   {rescanChanges.map(({ event, listing }) => (
@@ -552,7 +552,7 @@ export default function Home() {
                 </div>
                 <div className="mt-1 space-y-1">
                   {s.results.map((r) => (
-                    <div key={r.brokerId} className={r.ok ? "text-zinc-300" : "text-zinc-500"}>
+                    <div key={r.brokerId} className={r.ok ? "text-zinc-300" : "text-muted"}>
                       {r.outcome === "inconclusive" ? "⚠" : "✓"} {r.brokerId}: {r.outcome}
                       {r.outcome === "found" ? ` — ${r.listingsFound} listing(s)` : ""}
                       {r.error ? ` — ${r.error}` : ""}
@@ -618,11 +618,11 @@ function IdentityForm({
         <input className="input-std" placeholder="IL" maxLength={2} value={stateCode} onChange={(e) => setStateCode(e.target.value)} required />
       </label>
       <label className="field-label">
-        Age range <span className="font-normal text-zinc-600">Optional</span>
+        Age range <span className="font-normal text-muted">Optional</span>
         <input className="input-std" placeholder="25-30" value={ageRange} onChange={(e) => setAgeRange(e.target.value)} />
       </label>
       <label className="field-label sm:col-span-2">
-        Relatives <span className="font-normal text-zinc-600">Optional, comma-separated</span>
+        Relatives <span className="font-normal text-muted">Optional, comma-separated</span>
         <input
           className="input-std"
           placeholder="Improves match accuracy"
@@ -631,7 +631,7 @@ function IdentityForm({
         />
       </label>
       {!existing && (
-        <label className="flex items-start gap-3 text-xs leading-5 text-zinc-500 sm:col-span-2">
+        <label className="flex items-start gap-3 text-xs leading-5 text-muted sm:col-span-2">
           <input
             type="checkbox"
             checked={consent}
@@ -643,7 +643,7 @@ function IdentityForm({
         </label>
       )}
       {existing && (
-        <p className="text-xs leading-5 text-zinc-600 sm:col-span-2">
+        <p className="text-xs leading-5 text-muted sm:col-span-2">
           If you change the name or location, run a new scan so saved matches can be refreshed.
         </p>
       )}
@@ -696,7 +696,7 @@ function MatchHint({ match }: { match: MatchExplanation }) {
   return (
     <div className="space-y-1 border-l border-white/20 pl-3 text-xs">
       <p className="text-zinc-300">{matchSummary(match)}</p>
-      <ul className="space-y-0.5 text-zinc-500">
+      <ul className="space-y-0.5 text-muted">
         {matchDetails(match).map(([mark, text]) => (
           <li key={text}><span aria-hidden="true" className="inline-block w-4">{mark}</span>{text}</li>
         ))}
@@ -769,7 +769,7 @@ function OptOutRow({
           <div className="font-medium">{listing.displayName}</div>
           <div className="text-zinc-400">{listing.brokerId}</div>
         </div>
-        <div className={sub?.status === "failed" ? "text-zinc-500" : sub?.status === "removed" ? "text-white" : "text-zinc-400"}>
+        <div className={sub?.status === "failed" ? "text-muted" : sub?.status === "removed" ? "text-white" : "text-zinc-400"}>
           {isRelisted
             ? "Relisted — removal needed again"
             : isAbsent && !sub
@@ -784,7 +784,7 @@ function OptOutRow({
 
       {/* The recorded sessions are the evidence for what the broker actually saw. */}
       {(sub?.submitSessionId || sub?.confirmSessionId) && (
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-muted">
           Recorded Solari sessions —{" "}
           {[
             sub.submitSessionId && `submit ${sub.submitSessionId}`,
@@ -894,7 +894,7 @@ function OptOutRow({
             </button>
           </div>
           {sub.status === "awaiting_email" && (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
               <span>No email after a day or two? Check spam first; confirmation links can also expire.</span>
               <button className="btn-secondary" disabled={!!busy} onClick={onCancel}>Close attempt locally</button>
             </div>

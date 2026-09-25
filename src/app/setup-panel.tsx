@@ -29,12 +29,12 @@ export function SetupPanel({ status, error, checking, onCheck }: {
             <div className="card">
               <p className="font-medium">Broker connection</p>
               <p className="mt-1 text-zinc-400">{status.solari === "configured" ? "Solari key configured" : status.solari === "placeholder" ? "Replace the example Solari key" : "Add your Solari key"}</p>
-              <p className="mt-1 text-xs text-zinc-500">Provider access not yet tested</p>
+              <p className="mt-1 text-xs text-muted">Provider access not yet tested</p>
             </div>
             <div className="card">
               <p className="font-medium">Optional scoring</p>
               <p className="mt-1 text-zinc-400">{status.groq === "configured" ? "Groq key configured" : "Off — add a Groq key to enable"}</p>
-              <p className="mt-1 text-xs text-zinc-500">Not required for scans or removals</p>
+              <p className="mt-1 text-xs text-muted">Not required for scans or removals</p>
             </div>
           </div>
           {/* Only when the key is the problem: Node and storage show their own fix above. */}
@@ -47,7 +47,7 @@ export function SetupPanel({ status, error, checking, onCheck }: {
           )}
         </>
       )}
-      <p className="text-xs leading-5 text-zinc-500">
+      <p className="text-xs leading-5 text-muted">
         This check stays on your computer and tests local folder access. It does not open a
         browser session or verify provider billing, permissions, or broker compatibility.
         Scans and form previews use recorded cloud browsers and may incur provider charges.
