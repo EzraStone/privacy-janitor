@@ -1,5 +1,6 @@
 /**
- * Exposure scoring via Groq (LLaMA 3.x), on PII-redacted listings only.
+ * Exposure scoring via Groq (GROQ_MODEL, default openai/gpt-oss-120b), on
+ * PII-redacted listings only.
  *
  * Given all confirmed listings, the model returns a ranked kill list: each
  * listing gets a 0-100 exposure score + a plain-language rationale + the
@@ -86,7 +87,7 @@ Constraints:
     ],
     temperature: 0.2,
     max_tokens: 1500,
-    // Ask for JSON; LLaMA 3.3 supports response_format on Groq.
+    // Ask for JSON. The parser still tolerates fences if a model ignores this.
     response_format: { type: "json_object" },
   })
 
