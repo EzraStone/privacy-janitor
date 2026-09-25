@@ -39,12 +39,15 @@ export function createOptOutService(dependencies: Dependencies = {}) {
   // not be deduplicated against it — its URL exists only in memory.
   const jobs = new Map<string, { submissionId: string; done: Promise<void> }>()
 
-  async function prepare(listingId: string, contactEmail: string): Promise<Submission> {
+  async function prepare(listingId: string, rawContactEmail: string): Promise<Submission> {
     store.requireActionableListing(listingId)
     const active = store.activeSubmission(listingId)
     if (active) return active
     const pending = preparations.get(listingId)
     if (pending) return pending
+    // Normalize before validating: API callers don't get the browser's
+    // type="email" whitespace stripping that the dashboard relies on.
+    const contactEmail = rawContactEmail.trim()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail) || contactEmail.length > 254) {
       throw new Error("enter a valid contact email")
     }
@@ -55,7 +58,7 @@ export function createOptOutService(dependencies: Dependencies = {}) {
       const adapter = adapterFor(listing.brokerId)
       const { result, evidence } = await withSession(
         `optout-${adapter.id}`,
-        (page) => adapter.prepareOptOut(page, listing, identity, contactEmail.trim()),
+        (page) => adapter.prepareOptOut(page, listing, identity, contactEmail),
         { proxySessionId: createProxySessionId(`optout-${adapter.id}`) },
       )
       const current = store.requireActionableListing(listingId)
@@ -66,7 +69,7 @@ export function createOptOutService(dependencies: Dependencies = {}) {
       return store.commitPreparedOptOut({
         listingId, brokerId: adapter.id, createdAt: new Date().toISOString(),
         state: {
-          contactEmail: contactEmail.trim(), previewPath, summary: result.summary,
+          contactEmail, previewPath, summary: result.summary,
           snapshot: approvedSnapshot, sessionEvidenceDir: evidence.evidenceDir,
           proxySessionId: evidence.proxySessionId,
         },

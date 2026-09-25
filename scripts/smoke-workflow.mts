@@ -80,6 +80,11 @@ try {
 
   listing("unconfirmed", null)
   await assert.rejects(service.prepare("unconfirmed", "jordan@example.com"), /confirm/)
+  listing("padded")
+  const padded = await service.prepare("padded", "  jordan@example.com \n")
+  assert.equal(store.getPreparedOptOut("padded")?.state.contactEmail, "jordan@example.com")
+  store.cancelSubmission("padded", padded.id)
+  await assert.rejects(service.prepare("padded", "   "), /valid contact email/)
   listing("changed")
   const changed = await service.prepare("changed", "jordan@example.com")
   store.saveIdentity({ ...identity, city: "Austin" })
