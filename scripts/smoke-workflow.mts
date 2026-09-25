@@ -24,7 +24,7 @@ const adapter: BrokerAdapter = {
   id: "spokeo", name: "Synthetic broker", homepage: "https://www.spokeo.com", optOutInfo: "Test only",
   expectsEmailConfirmation: true,
   scan: async () => ({ outcome: "inconclusive", listings: [] }),
-  verifyMatch: () => 1,
+  explainMatch: () => ({ name: "same", place: "city_and_state" }),
   async prepareOptOut() { preparedCount++; return { screenshot: Buffer.from("synthetic"), summary: "Synthetic preview" } },
   async submitOptOut() {
     submittedCount++

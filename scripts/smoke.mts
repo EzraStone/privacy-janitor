@@ -11,6 +11,7 @@
  * Run: npm run smoke
  */
 import { adapters } from "../src/adapters/registry.ts"
+import { matchHintsFor } from "../src/engine/match-hints.ts"
 import { createProxySessionId, proxySessionId } from "../src/engine/solari.ts"
 import {
   classifyBrokerScan,
@@ -43,7 +44,7 @@ console.log("smoke: adapter registry")
 check("3 adapters registered", adapters.length === 3)
 for (const a of adapters) {
   check(`${a.id}: has scan`, typeof a.scan === "function")
-  check(`${a.id}: has verifyMatch`, typeof a.verifyMatch === "function")
+  check(`${a.id}: has explainMatch`, typeof a.explainMatch === "function")
   check(`${a.id}: has prepareOptOut`, typeof a.prepareOptOut === "function")
   check(`${a.id}: has submitOptOut`, typeof a.submitOptOut === "function")
   check(`${a.id}: declares email-confirmation stance`, typeof a.expectsEmailConfirmation === "boolean")
@@ -114,7 +115,7 @@ const wpListing = (displayName: string, address: string): Listing => ({
 for (const adapter of adapters) {
   for (const [shown, address] of [["Jordan Example", "12 Main St, Austin, TX"], ["Jordan A Example", "9 Elm St, Boston, MA"]]) {
     check(`${adapter.id} scores "${shown}" at "${address}" like the shared scorer`,
-      adapter.verifyMatch(wpListing(shown, address), wpPerson) ===
+      matchScore(adapter.explainMatch(wpListing(shown, address), wpPerson)) ===
         scoreMatch(shown, wpPerson.fullName, [address], wpPerson.city, wpPerson.stateCode, {}))
   }
 }
@@ -136,6 +137,19 @@ check("missing details stay unknown, never a mismatch",
 check("the score is derived from the explanation", scoreMatch("Jordan Example", "Jordan Example",
   ["742 Evergreen Terrace, Chicago, IL"], "Chicago", "IL",
   { age: "42", ageRange: "40-45", relatives: ["Casey Example"], listingRelatives: ["Casey E"] }) === matchScore(explained))
+
+console.log("smoke: review hints")
+// Only listings still awaiting "Is this you?" get a hint, from their own broker.
+const awaiting = { ...wpListing("Jordan Example", "9 Elm St, Boston, MA"), id: "awaiting" }
+const hints = matchHintsFor([
+  awaiting,
+  { ...awaiting, id: "decided", confirmedMine: true },
+  { ...awaiting, id: "absent", presenceStatus: "absent" },
+  { ...awaiting, id: "unknown-broker", brokerId: "not-a-broker" },
+], () => wpPerson)
+check("only listings awaiting review get a hint", JSON.stringify(Object.keys(hints)) === JSON.stringify(["awaiting"]))
+check("the hint reports the listing's agreeing details",
+  hints.awaiting?.name === "same" && hints.awaiting?.place === "city_and_state")
 
 console.log("smoke: profile URL slugs")
 // Slugs are ASCII and hyphen-joined, so a surname can lose its accents,

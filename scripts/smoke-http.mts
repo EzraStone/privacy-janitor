@@ -57,6 +57,7 @@ try {
   }
   const empty = await (await fetch(`${base}/api/state`)).json()
   assert.deepEqual(empty.identities, [])
+  assert.deepEqual(empty.matchHints, {}, "review hints are served, empty with no listings")
   const saved = await post("/api/state", { action: "save-identity", identity: { fullName: "Jordan Example", city: "Chicago", stateCode: "IL" } })
   assert.equal(saved.status, 200)
   const { identity } = await saved.json()

@@ -32,7 +32,7 @@ import {
   tryAllTexts,
   tryInnerText,
   ageFrom,
-  scoreMatch,
+  explainListing,
   isPersonProfileSlug,
   namesFrom,
   phonesFrom,
@@ -176,21 +176,7 @@ export const whitepages: BrokerAdapter = {
 
   // ── match confidence ─────────────────────────────────────────────────────
 
-  verifyMatch(listing, identity): number {
-    return scoreMatch(
-      listing.displayName,
-      identity.fullName,
-      listing.exposedData.addresses ?? [],
-      identity.city,
-      identity.stateCode,
-      {
-        age: listing.exposedData.age,
-        ageRange: identity.ageRange,
-        relatives: identity.relatives,
-        listingRelatives: listing.exposedData.relatives,
-      },
-    )
-  },
+  explainMatch: explainListing,
 
   // ── opt-out: prepare (fills, screenshots, does NOT submit) ────────────────
 

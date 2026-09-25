@@ -7,6 +7,7 @@ import type {
   BrokerPage,
   BrokerLocator,
   BrokerScanObservation,
+  Identity,
   Listing,
   MatchExplanation,
 } from "@/types"
@@ -462,6 +463,23 @@ export function explainMatch(
     explanation.relatives = mine.some((m) => theirs.includes(m)) ? "shared" : "none_shared"
   }
   return explanation
+}
+
+/** A stored listing against its profile, the way every current adapter reads it. */
+export function explainListing(listing: Listing, identity: Identity): MatchExplanation {
+  return explainMatch(
+    listing.displayName,
+    identity.fullName,
+    listing.exposedData.addresses ?? [],
+    identity.city,
+    identity.stateCode,
+    {
+      age: listing.exposedData.age,
+      ageRange: identity.ageRange,
+      relatives: identity.relatives,
+      listingRelatives: listing.exposedData.relatives,
+    },
+  )
 }
 
 /** The 0..1 score an explanation adds up to. */

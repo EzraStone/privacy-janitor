@@ -156,8 +156,6 @@ export interface ScanRun {
 
 /** Everything the engine needs to run one broker's flow. Adapters are pure
  *  logic + Solari pages; the engine owns sessions, evidence, and store. */
-export type MatchConfidence = number // 0..1
-
 /** Which details of a listing agree with the profile. A hint for the person
  *  reviewing it, never a decision: namesakes can share a name and a city. */
 export interface MatchExplanation {
@@ -182,10 +180,9 @@ export interface BrokerAdapter {
    *  The engine provides the page (stealth session already launched). */
   scan(page: BrokerPage, identity: Identity): Promise<BrokerScanObservation>
 
-  /** How likely is it that this listing is the identity (vs a namesake)?
-   *  0..1. Not yet consulted by the engine or dashboard: every listing is
-   *  shown for the user to confirm, unscored. */
-  verifyMatch(listing: Listing, identity: Identity): MatchConfidence
+  /** Which of this listing's details agree with the profile. Shown as a hint
+   *  on the review card; the user still decides every match. */
+  explainMatch(listing: Listing, identity: Identity): MatchExplanation
 
   /** Drive the broker's opt-out form up to (but NOT including) the final
    *  submit. Return a preview the engine screenshots for user approval. */

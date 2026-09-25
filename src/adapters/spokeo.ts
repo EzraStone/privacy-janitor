@@ -28,7 +28,7 @@ import {
   tryInnerText,
   ageFrom,
   emailsFrom,
-  scoreMatch,
+  explainListing,
   isPersonProfileSlug,
   namesFrom,
   phonesFrom,
@@ -174,21 +174,7 @@ export const spokeo: BrokerAdapter = {
 
   // ── match confidence ─────────────────────────────────────────────────────
 
-  verifyMatch(listing, identity): number {
-    return scoreMatch(
-      listing.displayName,
-      identity.fullName,
-      listing.exposedData.addresses ?? [],
-      identity.city,
-      identity.stateCode,
-      {
-        age: listing.exposedData.age,
-        ageRange: identity.ageRange,
-        relatives: identity.relatives,
-        listingRelatives: listing.exposedData.relatives,
-      },
-    )
-  },
+  explainMatch: explainListing,
 
   // ── opt-out: prepare ──────────────────────────────────────────────────────
 

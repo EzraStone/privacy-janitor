@@ -3,6 +3,7 @@ import { ok, fail, failFromError, readJson } from "../_lib"
 import * as store from "@/store"
 import { resumeIncompleteScans, startScan } from "@/engine/orchestrator"
 import { optOuts } from "@/engine/optouts"
+import { matchHintsFor } from "@/engine/match-hints"
 import { listEvidenceEntries, removeEvidencePaths } from "@/engine/cleanup"
 import type { Identity } from "@/types"
 import { assertTrustedLocalRequest } from "@/security/requests"
@@ -17,9 +18,11 @@ export async function GET(req: NextRequest) {
       resumeIncompleteScans()
       optOuts.resume()
     }
+    const listings = store.listListings()
     return ok({
       identities: store.listIdentities(),
-      listings: store.listListings(),
+      listings,
+      matchHints: matchHintsFor(listings, store.getIdentity),
       submissions: store.listSubmissions(),
       scans: store.listScanRuns(),
     })
