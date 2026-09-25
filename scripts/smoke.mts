@@ -16,6 +16,7 @@ import {
   classifyBrokerScan,
   isNoResultText,
   ageFrom,
+  emailsFrom,
   isPersonProfileSlug,
   namesFrom,
   phonesFrom,
@@ -159,6 +160,16 @@ check("a container is split into its phones",
   same(phonesFrom(["Phone numbers\n(312) 555-0100\n312.555.0199\nShow more"]), ["(312) 555-0100", "312.555.0199"]))
 check("repeated numbers collapse", same(phonesFrom(["(312) 555-0100", "312-555-0100"]), ["(312) 555-0100"]))
 check("years and ZIP codes are not phones", phonesFrom(["2024", "62704"]).length === 0)
+
+console.log("smoke: scraped emails are sanity-checked")
+// A mailto selector also matches the broker's own "contact us" link, which is
+// neither an email address nor the person's.
+check("an email is kept", same(emailsFrom(["jordan@example.com"], "spokeo.com"), ["jordan@example.com"]))
+check("a mailto label is not an email", emailsFrom(["Email us"], "spokeo.com").length === 0)
+check("the broker's own address is not the person's",
+  emailsFrom(["support@spokeo.com", "help@mail.spokeo.com"], "spokeo.com").length === 0)
+check("repeated emails collapse",
+  same(emailsFrom(["Jordan@Example.com", "jordan@example.com"], "spokeo.com"), ["Jordan@Example.com"]))
 
 console.log("smoke: PII redaction")
 const identity = {

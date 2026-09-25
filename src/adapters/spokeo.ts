@@ -27,6 +27,7 @@ import {
   tryAllTexts,
   tryInnerText,
   ageFrom,
+  emailsFrom,
   scoreMatch,
   isPersonProfileSlug,
   namesFrom,
@@ -133,7 +134,7 @@ export const spokeo: BrokerAdapter = {
             '[data-testid="relative"]',
             ".relative",
           ])),
-          emails: await tryAllTexts(page, ['[data-testid="email"]', 'a[href^="mailto:"]']),
+          emails: emailsFrom(await tryAllTexts(page, ['[data-testid="email"]', 'a[href^="mailto:"]']), "spokeo.com"),
         }
 
         for (const k of Object.keys(exposedData) as Array<keyof typeof exposedData>) {

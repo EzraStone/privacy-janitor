@@ -317,6 +317,22 @@ export function phonesFrom(texts: string[]): string[] {
   return phones
 }
 
+/**
+ * Email addresses a broker exposes about the person. A mailto selector also
+ * matches the broker's own "contact us" link, whose text may not even be an
+ * address — and whose address, at the broker's domain, is never the person's.
+ */
+export function emailsFrom(texts: string[], brokerDomain: string): string[] {
+  const seen = new Set<string>()
+  return texts.map((text) => text.trim()).filter((email) => {
+    const domain = email.split("@")[1]?.toLowerCase() ?? ""
+    const own = domain === brokerDomain || domain.endsWith(`.${brokerDomain}`)
+    const fresh = !seen.has(email.toLowerCase())
+    seen.add(email.toLowerCase())
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !own && fresh
+  })
+}
+
 /** Inner text of the first visible match, or undefined. */
 export async function tryInnerText(
   page: BrokerPage,
