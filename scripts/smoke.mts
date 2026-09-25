@@ -15,6 +15,7 @@ import { createProxySessionId, proxySessionId } from "../src/engine/solari.ts"
 import {
   classifyBrokerScan,
   isNoResultText,
+  ageFrom,
   isPersonProfileSlug,
   requireProfileName,
   scoreMatch,
@@ -125,6 +126,18 @@ check("a heading without the profile's accents verifies", await verifies("Jose G
 check("an accented heading verifies an ASCII profile", await verifies("José García", "Jose Garcia"))
 check("a hyphenated surname heading verifies", await verifies("Mary Smith-Jones, 42", "Mary Smith-Jones"))
 check("a different surname does not verify", !(await verifies("Jordan Sample", "Jordan Example")))
+
+console.log("smoke: scraped ages are sanity-checked")
+// Loose age selectors also match page wrappers and pagination, and an age
+// card that reads "Page 1 of 3" misleads the "Is this you?" decision.
+check("a bare age is kept", ageFrom(["42"]) === "42")
+check("a labelled age is kept", ageFrom(["Age: 42"]) === "Age: 42")
+check("a decade age is kept", ageFrom(["Age 40s"]) === "Age 40s")
+check("the first real age wins", ageFrom(["Page 1 of 3", "42 years old"]) === "42 years old")
+check("a result count is not an age", ageFrom(["Showing 25 results"]) === undefined)
+check("pagination is not an age", ageFrom(["Page 25"]) === undefined)
+check("a whole page section is not an age",
+  ageFrom(["Jordan Example\nAge 42\n742 Evergreen Terrace, Chicago, IL"]) === undefined)
 
 console.log("smoke: PII redaction")
 const identity = {

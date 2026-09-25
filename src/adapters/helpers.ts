@@ -272,6 +272,22 @@ export async function requireBrokerReceipt(page: BrokerPage, stage: "submit" | "
   throw new Error("No recognized broker receipt was found. The action may have completed; review before retrying.")
 }
 
+const AGE_TEXT = /^(?:age:?\s*)?(\d{1,3})s?(?:\s*(?:years?(?:\s*old)?|yrs?\.?))?$/i
+
+/**
+ * The first text shaped like an adult age ("42", "Age: 42", "Age 40s",
+ * "42 years old"), or undefined. Loose age selectors also match page wrappers
+ * and pagination, and "Showing 25 results" merely contains a plausible number.
+ */
+export function ageFrom(texts: string[]): string | undefined {
+  for (const text of texts) {
+    const normalized = text.replace(/\s+/g, " ").trim()
+    const years = Number(normalized.match(AGE_TEXT)?.[1])
+    if (years >= 18 && years <= 119) return normalized
+  }
+  return undefined
+}
+
 /** Inner text of the first visible match, or undefined. */
 export async function tryInnerText(
   page: BrokerPage,

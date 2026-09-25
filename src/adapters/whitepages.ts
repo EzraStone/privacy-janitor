@@ -31,6 +31,7 @@ import {
   inspectBrokerSearchPage,
   tryAllTexts,
   tryInnerText,
+  ageFrom,
   scoreMatch,
   isPersonProfileSlug,
 } from "./helpers.ts"
@@ -125,7 +126,7 @@ export const whitepages: BrokerAdapter = {
             ".phone",
             'a[href^="tel:"]',
           ]),
-          age: (await tryAllTexts(page, ['[data-testid="age"]', ".age", 'span[class*="age"]']))[0],
+          age: ageFrom(await tryAllTexts(page, ['[data-testid="age"]', ".age", 'span[class*="age"]'])),
           relatives: await tryAllTexts(page, [
             '[data-testid="relative"]',
             'a[href*="/relative/"]',

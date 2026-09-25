@@ -27,6 +27,7 @@ import {
   inspectBrokerSearchPage,
   tryAllTexts,
   tryInnerText,
+  ageFrom,
   scoreMatch,
   isPersonProfileSlug,
 } from "./helpers.ts"
@@ -139,9 +140,7 @@ export const fastpeoplesearch: BrokerAdapter = {
             'a[href^="tel:"]',
             '[class*="phone" i]',
           ]),
-          age: (
-            await tryAllTexts(page, ['[class*="age" i]', 'span:has-text("Age")'])
-          )[0],
+          age: ageFrom(await tryAllTexts(page, ['[class*="age" i]', 'span:has-text("Age")'])),
           relatives: await tryAllTexts(page, [
             'a[href*="/name/"]',
             '[class*="relative" i]',

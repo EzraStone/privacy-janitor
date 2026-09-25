@@ -26,6 +26,7 @@ import {
   inspectBrokerSearchPage,
   tryAllTexts,
   tryInnerText,
+  ageFrom,
   scoreMatch,
   isPersonProfileSlug,
 } from "./helpers.ts"
@@ -124,7 +125,7 @@ export const spokeo: BrokerAdapter = {
             'a[href^="tel:"]',
             ".phone",
           ]),
-          age: (await tryAllTexts(page, ['[data-testid="age"]', ".age", 'span[class*="age"]']))[0],
+          age: ageFrom(await tryAllTexts(page, ['[data-testid="age"]', ".age", 'span[class*="age"]'])),
           relatives: await tryAllTexts(page, [
             'a[href*="-F"]',
             '[data-testid="relative"]',
