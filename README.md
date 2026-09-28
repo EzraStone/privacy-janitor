@@ -33,6 +33,10 @@ user data, live broker results, or live submissions are included in these reposi
 
 <p align="center"><a href="docs/demo/match-hints-demo.mp4"><strong>▶ Watch the 41-second match-hints demo</strong></a><br><sub>How each review card shows which details match — and why a name and city alone never read as a strong match.</sub></p>
 
+![The opt-out queue with fictional requests: one not started, one removed and verified, one confirmed but still listed, one waiting on an email link](docs/images/opt-out-queue-demo.png)
+
+<p align="center"><sub><strong>The opt-out queue</strong>: what still needs you, each request dated, the recorded sessions behind it, and the way forward when a broker stalls.</sub></p>
+
 ![PrivacyJanitor consent-based profile form filled with fictional demo data](docs/images/profile-form-demo.png)
 
 <p align="center"><sub><strong>Clear profile setup</strong> with explicit consent before any person is added.</sub></p>
