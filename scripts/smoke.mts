@@ -29,7 +29,7 @@ import {
   scoreMatch,
 } from "../src/adapters/helpers.ts"
 import { buildRedactionMap, redactText, redactListing } from "../src/scoring/redact.ts"
-import { parseExposureReport } from "../src/scoring/index.ts"
+import { parseExposureReport, scoringModel } from "../src/scoring/index.ts"
 import { currentRankings } from "../src/scoring/report.ts"
 import type { BrokerPage, Identity, Listing } from "../src/types.ts"
 
@@ -486,6 +486,12 @@ check("recommended action shows real values",
   restored.rankings[0].recommendedAction === `Remove ${typedIdentity.fullName} from this broker first.`)
 check("summary shows real values; invented tokens stay as written",
   restored.summary === `${typedIdentity.fullName} is findable at ${homeAddress}. See [ADDR_99].`)
+
+console.log("smoke: scoring model setting")
+// A stray space in .env must not become part of the model name Groq rejects.
+check("an unset model uses the default", scoringModel(undefined) === "openai/gpt-oss-120b")
+check("a blank model uses the default", scoringModel("   ") === "openai/gpt-oss-120b")
+check("a model name is trimmed", scoringModel(" llama-3.3-70b-versatile ") === "llama-3.3-70b-versatile")
 
 console.log("smoke: a report outlives later decisions")
 // A listing marked not you, or found gone by a rescan, keeps its old ranking

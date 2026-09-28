@@ -38,6 +38,12 @@ interface RawRanking {
   recommended_action: string
 }
 
+/** The Groq model to score with: GROQ_MODEL, trimmed, or the default. A
+ *  stray space in .env would otherwise become part of the model name. */
+export function scoringModel(configured: string | undefined): string {
+  return configured?.trim() || "openai/gpt-oss-120b"
+}
+
 export async function scoreExposure(
   identity: Identity,
   listings: Listing[],
@@ -49,7 +55,7 @@ export async function scoreExposure(
     )
   }
 
-  const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b"
+  const model = scoringModel(process.env.GROQ_MODEL)
   const groq = new Groq({ apiKey })
   const map = buildRedactionMap(identity, listings)
 
