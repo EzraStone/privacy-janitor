@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       identity?: Partial<Identity>
       identityId?: string
       listingId?: string
-    }>(req)
+    }>(req, ["action", "identityId", "listingId"])
 
     switch (body.action) {
       case "save-identity": {

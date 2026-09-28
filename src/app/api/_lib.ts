@@ -20,7 +20,12 @@ export function failFromError(error: unknown) {
   return fail(error instanceof Error ? error.message : "request failed", 500)
 }
 
-export async function readJson<T>(req: Request, maxBytes = 16_384): Promise<T> {
+/**
+ * Parse a JSON object body whose named fields, when present, are strings.
+ * The routes pass ids and text straight to SQLite and string methods, where
+ * an object or number would fail as a 500 instead of a client error.
+ */
+export async function readJson<T>(req: Request, stringFields: string[] = [], maxBytes = 16_384): Promise<T> {
   const contentType = req.headers.get("content-type") ?? ""
   if (!contentType.toLowerCase().startsWith("application/json")) {
     throw new RequestValidationError("content-type must be application/json", 415)
@@ -45,6 +50,12 @@ export async function readJson<T>(req: Request, maxBytes = 16_384): Promise<T> {
   // client error — `null` would otherwise crash the handler with a 500.
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new RequestValidationError("JSON body must be an object")
+  }
+  for (const field of stringFields) {
+    const value = (parsed as Record<string, unknown>)[field]
+    if (value !== undefined && typeof value !== "string") {
+      throw new RequestValidationError(`${field} must be a string`)
+    }
   }
   return parsed as T
 }

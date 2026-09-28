@@ -99,6 +99,10 @@ try {
   assert.equal(await saveStatus({ id: tidied.id }), 404, "saving a deleted profile does not resurrect it")
   const reopen = await fetch(`${base}/api/actions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "reopen-removal" }) })
   assert.equal(reopen.status, 400, "reopen-removal requires the exact attempt")
+  // Ids and text fields of any other type must be a 400, not reach SQLite as a 500.
+  assert.equal((await post("/api/state", { action: "confirm-listing", listingId: { id: "lst_1" } })).status, 400, "object listing id")
+  assert.equal((await post("/api/state", { action: "scan", identityId: ["id_1"] })).status, 400, "array profile id")
+  assert.equal((await post("/api/actions", { action: "score", identityId: 7 })).status, 400, "numeric profile id")
   for (const action of ["confirm-listing", "reject-listing", "review-listing"]) {
     assert.equal((await post("/api/state", { action, listingId: "lst_missing" })).status, 404, `${action} reports unknown listings`)
   }

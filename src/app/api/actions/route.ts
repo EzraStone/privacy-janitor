@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       identityId?: string
       contactEmail?: string
       confirmationUrl?: string
-    }>(req)
+    }>(req, ["action", "listingId", "submissionId", "identityId", "contactEmail", "confirmationUrl"])
 
     switch (body.action) {
       case "prepare-optout": {
