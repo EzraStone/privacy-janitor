@@ -10,7 +10,7 @@ import { DatabaseSync } from "node:sqlite"
 import { chmodSync, closeSync, mkdirSync, openSync } from "node:fs"
 import { dirname } from "node:path"
 import { getDatabasePath } from "../config/paths.ts"
-import { NotFoundError } from "../errors.ts"
+import { ConflictError, NotFoundError } from "../errors.ts"
 import { activeSubmissionStatuses, canTransition } from "../engine/submission-state.ts"
 import type {
   BrokerScanObservation,
@@ -778,7 +778,7 @@ export function returnListingToReview(id: string): boolean {
       return false
     }
     if (activeSubmission(id)) {
-      throw new Error("cancel or finish this listing's active request before reviewing it again")
+      throw new ConflictError("cancel or finish this listing's active request before reviewing it again")
     }
     db.prepare("UPDATE listings SET confirmed_mine = NULL WHERE id = ?").run(id)
     db.exec("COMMIT")
@@ -1009,8 +1009,8 @@ export function activeSubmission(listingId: string): Submission | undefined {
 export function requireActionableListing(listingId: string): Listing {
   const listing = getListing(listingId)
   if (!listing) throw new NotFoundError("listing not found")
-  if (listing.confirmedMine !== true) throw new Error("confirm that this listing is yours first")
-  if (listing.presenceStatus === "absent") throw new Error("this listing is currently absent; rescan before another broker action")
+  if (listing.confirmedMine !== true) throw new ConflictError("confirm that this listing is yours first")
+  if (listing.presenceStatus === "absent") throw new ConflictError("this listing is currently absent; rescan before another broker action")
   if (!getIdentity(listing.identityId)) throw new NotFoundError("profile not found")
   return listing
 }
@@ -1071,7 +1071,7 @@ export function requireCurrentSubmission(listingId: string, submissionId: string
   const sub = getSubmission(submissionId)
   if (!sub || sub.listingId !== listingId) throw new NotFoundError("submission does not belong to this listing")
   const current = activeSubmission(listingId) ?? listSubmissions(listingId)[0]
-  if (current?.id !== sub.id) throw new Error("this attempt was superseded; refresh the queue")
+  if (current?.id !== sub.id) throw new ConflictError("this attempt was superseded; refresh the queue")
   return sub
 }
 
@@ -1083,11 +1083,11 @@ export function requireCurrentSubmission(listingId: string, submissionId: string
 export function reopenIgnoredRemoval(listingId: string, submissionId: string): Submission {
   const sub = requireCurrentSubmission(listingId, submissionId)
   if (sub.status !== "submitted" && sub.status !== "confirmed") {
-    throw new Error("only a request that was sent to the broker can be reopened")
+    throw new ConflictError("only a request that was sent to the broker can be reopened")
   }
   const listing = getListing(listingId)
   if (!listing || listing.presenceStatus === "absent" || listing.lastSeenAt <= sub.updatedAt) {
-    throw new Error("rescan first: reopen only if the listing is still visible after this request")
+    throw new ConflictError("rescan first: reopen only if the listing is still visible after this request")
   }
   transitionSubmission(sub.id, sub.status, "failed", {
     lastError: "Still listed after this request; the broker has not removed it yet.",
@@ -1100,7 +1100,7 @@ export function cancelSubmission(listingId: string, submissionId: string): Submi
   if (sub.status === "cancelled") return sub
   // awaiting_email has nothing in flight: the broker is waiting on the user.
   if (!["prepared", "approved", "attention_required", "awaiting_email"].includes(sub.status)) {
-    throw new Error("this attempt cannot be cancelled while a broker action is in flight or completed")
+    throw new ConflictError("this attempt cannot be cancelled while a broker action is in flight or completed")
   }
   transitionSubmission(sub.id, sub.status, "cancelled", {}, true)
   return getSubmission(sub.id)!

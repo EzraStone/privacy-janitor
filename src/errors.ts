@@ -18,3 +18,10 @@ export class NotFoundError extends StatusError {
     super(message, 404)
   }
 }
+
+/** The record exists, but its current state does not allow the request. */
+export class ConflictError extends StatusError {
+  constructor(message: string) {
+    super(message, 409)
+  }
+}

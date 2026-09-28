@@ -127,9 +127,9 @@ try {
   if (process.platform !== "win32") {
     assert.equal(statSync(join(directory, "privacy-janitor.db")).mode & 0o077, 0, "a fresh database is owner-only")
   }
-  // Expected failures carry their meaning: an unknown record is a 404, not a
-  // 500 that reads as a crash. A sent request is seeded straight into the
-  // test database; the server reads it on the next request.
+  // Expected failures carry their meaning: an unknown record is a 404 and a
+  // state conflict a 409, never a 500 that reads as a crash. A sent request
+  // is seeded straight into the test database; the server reads it next.
   process.env.PJ_DATA_DIR = directory
   const store = await import("../src/store/index.ts")
   const seededAt = new Date().toISOString()
@@ -143,6 +143,9 @@ try {
   assert.equal(await actionStatus({ action: "cancel-optout", listingId: "lst_sent", submissionId: "sub_missing" }), 404, "unknown attempt")
   assert.equal(await actionStatus({ action: "reopen-removal", listingId: "lst_missing", submissionId: sent.id }), 404, "attempt of another listing")
   assert.equal((await post("/api/state", { action: "delete-identity", identityId: "id_missing" })).status, 404, "unknown profile")
+  // A request in the wrong state for the action is a conflict, not a crash.
+  assert.equal(await actionStatus({ action: "cancel-optout", listingId: "lst_sent", submissionId: sent.id }), 409, "a sent request cannot be cancelled")
+  assert.equal(await actionStatus({ action: "reopen-removal", listingId: "lst_sent", submissionId: sent.id }), 409, "reopen waits for a rescan")
   // "Reset all" promises to delete all evidence, including files whose
   // database reference was lost; reference-based cleanup never finds those.
   mkdirSync(join(evidence, "orphaned-run"))
