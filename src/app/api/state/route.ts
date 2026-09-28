@@ -4,6 +4,7 @@ import * as store from "@/store"
 import { resumeIncompleteScans, startScan } from "@/engine/orchestrator"
 import { optOuts } from "@/engine/optouts"
 import { matchHintsFor } from "@/engine/match-hints"
+import { adapters } from "@/adapters/registry"
 import { listEvidenceEntries, removeEvidencePaths } from "@/engine/cleanup"
 import type { Identity } from "@/types"
 import { normalizeAgeRange } from "@/profile"
@@ -26,6 +27,7 @@ export async function GET(req: NextRequest) {
       matchHints: matchHintsFor(listings, store.getIdentity),
       submissions: store.listSubmissions(),
       scans: store.listScanRuns(),
+      brokers: adapters.map(({ id, name }) => ({ id, name })),
     })
   } catch (err) {
     return failFromError(err)

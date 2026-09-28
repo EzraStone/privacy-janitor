@@ -13,6 +13,7 @@ interface StateResponse {
   submissions: Submission[]
   scans: ScanRun[]
   matchHints?: Record<string, MatchExplanation>
+  brokers?: Array<{ id: string; name: string }>
 }
 
 const statusLabel: Record<SubmissionStatus, string> = {
@@ -172,6 +173,7 @@ export default function Home() {
   }
 
   const identity = state?.identities.find((i) => i.id === activeIdentityId) ?? null
+  const brokerName = (id: string) => state?.brokers?.find((broker) => broker.id === id)?.name ?? id
   const scopedListings = (state?.listings ?? []).filter((l) => l.identityId === activeIdentityId)
   const scopedSubmissions = (state?.submissions ?? []).filter((s) =>
     scopedListings.some((l) => l.id === s.listingId),
@@ -371,7 +373,7 @@ export default function Home() {
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             {pendingListings.map((l) => (
-              <ListingCard key={l.id} listing={l} match={state?.matchHints?.[l.id]}
+              <ListingCard key={l.id} listing={l} broker={brokerName(l.brokerId)} match={state?.matchHints?.[l.id]}
                 onConfirm={() => void stateAction({ action: "confirm-listing", listingId: l.id }, `c-${l.id}`)}
                 onReject={() => void stateAction({ action: "reject-listing", listingId: l.id }, `c-${l.id}`)}
               />
@@ -390,7 +392,7 @@ export default function Home() {
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             {rejectedListings.map((l) => (
-              <ListingCard key={l.id} listing={l}
+              <ListingCard key={l.id} listing={l} broker={brokerName(l.brokerId)}
                 onReviewAgain={() => void stateAction({ action: "review-listing", listingId: l.id }, `r-${l.id}`)}
               />
             ))}
@@ -428,7 +430,7 @@ export default function Home() {
                   return (
                     <div key={r.listingId} className="card space-y-1 text-sm">
                       <div className="flex justify-between font-medium">
-                        <span>{listing?.displayName} · {r.brokerId}</span>
+                        <span>{listing?.displayName} · {brokerName(r.brokerId)}</span>
                         <span className="text-white">{r.score}/100</span>
                       </div>
                       <p className="text-zinc-400">{r.rationale}</p>
@@ -477,6 +479,7 @@ export default function Home() {
                 <OptOutRow
                   key={l.id}
                   listing={l}
+                  broker={brokerName(l.brokerId)}
                   sub={sub}
                   busy={busy}
                   remoteReady={setup?.canStartScan === true}
@@ -526,7 +529,7 @@ export default function Home() {
                 <div className="space-y-1 text-zinc-400">
                   {rescanChanges.map(({ event, listing }) => (
                     <div key={`${event.brokerId}-${event.listingId}-${event.type}`}>
-                      {event.brokerId}: {listing?.displayName ?? "a listing"}
+                      {brokerName(event.brokerId)}: {listing?.displayName ?? "a listing"}
                       {listing?.exposedData.addresses?.[0] ? ` (${listing.exposedData.addresses[0]})` : ""}
                       {" — "}{event.type.replaceAll("_", " ")}
                     </div>
@@ -553,7 +556,7 @@ export default function Home() {
                 <div className="mt-1 space-y-1">
                   {s.results.map((r) => (
                     <div key={r.brokerId} className={r.ok ? "text-zinc-300" : "text-muted"}>
-                      {r.outcome === "inconclusive" ? "⚠" : "✓"} {r.brokerId}: {r.outcome}
+                      {r.outcome === "inconclusive" ? "⚠" : "✓"} {brokerName(r.brokerId)}: {r.outcome}
                       {r.outcome === "found" ? ` — ${r.listingsFound} listing(s)` : ""}
                       {r.error ? ` — ${r.error}` : ""}
                     </div>
@@ -705,9 +708,10 @@ function MatchHint({ match }: { match: MatchExplanation }) {
 }
 
 function ListingCard({
-  listing, match, onConfirm, onReject, onReviewAgain,
+  listing, broker, match, onConfirm, onReject, onReviewAgain,
 }: {
   listing: Listing
+  broker: string
   match?: MatchExplanation
   onConfirm?: () => void
   onReject?: () => void
@@ -717,7 +721,7 @@ function ListingCard({
   return (
     <div className="card space-y-2 text-sm">
       <div className="font-semibold tracking-tight">{listing.displayName}</div>
-      <div className="eyebrow">{listing.brokerId}</div>
+      <div className="eyebrow">{broker}</div>
       {e.addresses?.length ? <div>📍 {e.addresses.slice(0, 2).join(" · ")}</div> : null}
       {e.phones?.length ? <div>📞 {e.phones.slice(0, 2).join(" · ")}</div> : null}
       {e.age ? <div>👤 age {e.age}</div> : null}
@@ -740,10 +744,11 @@ function ListingCard({
 }
 
 function OptOutRow({
-  listing, sub, busy, remoteReady, contactEmail, confirmUrl, onConfirmUrlChange,
+  listing, broker, sub, busy, remoteReady, contactEmail, confirmUrl, onConfirmUrlChange,
   onPrepare, onApprove, onCancel, onConfirmEmail, onReviewAgain, onReopen,
 }: {
   listing: Listing
+  broker: string
   sub?: Submission
   busy: string | null
   remoteReady: boolean
@@ -766,7 +771,7 @@ function OptOutRow({
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <div className="font-medium">{listing.displayName}</div>
-          <div className="text-zinc-400">{listing.brokerId}</div>
+          <div className="text-zinc-400">{broker}</div>
         </div>
         <div className={sub?.status === "failed" ? "text-muted" : sub?.status === "removed" ? "text-white" : "text-zinc-400"}>
           {isRelisted

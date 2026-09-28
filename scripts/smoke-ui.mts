@@ -163,6 +163,11 @@ try {
   const verification = page.locator(".card", { hasText: "Latest verification" })
   assert.match(await verification.innerText(), /Queue still listed \(1 Synthetic Way, Chicago, IL\) — still listed/)
   assert.doesNotMatch(await verification.innerText(), /Someone Else/)
+  // Brokers appear by name, never by internal id.
+  assert.match(await verification.innerText(), /Spokeo: Queue still listed/)
+  assert.equal((await card(page, "hint-strong").locator(".eyebrow").innerText()).trim(), "SPOKEO")
+  assert.match(await page.locator("section", { hasText: "Scan history" }).innerText(), /Spokeo: found/)
+  assert.match(await row(page, "Queue prepared").innerText(), /^Queue prepared\nSpokeo\n/)
   console.log("ok: the rescan diff names each listing and skips not-you records")
 
   // With no key configured, setup advice asks for one.
@@ -176,7 +181,7 @@ try {
   const framed = attacker.frames().find((frame) => frame !== attacker.mainFrame())
   assert.ok(!(await framed?.locator("body").innerText().catch(() => ""))?.includes("PrivacyJanitor"), "dashboard refused to render in a frame")
   console.log("ok: setup advice, no page errors, and no framing by other sites")
-  console.log("UI checks passed: match hints, undo, WCAG 2.1 AA, request states, rescan diff, setup advice, framing")
+  console.log("UI checks passed: match hints, undo, WCAG 2.1 AA, request states, rescan diff, broker names, setup advice, framing")
 } finally {
   await browser.close()
   if (child.exitCode === null) child.kill()
