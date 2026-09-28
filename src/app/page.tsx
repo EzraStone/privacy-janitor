@@ -364,6 +364,9 @@ export default function Home() {
               {activeScan ? "Scanning…" : busy === "scan" ? "Starting…" : "Run broker scan"}
             </button>
           </div>
+          {setup && !setup.canStartScan && !activeScan && (
+            <p className="text-sm text-zinc-400">Scanning starts once setup is complete — see the checks above.</p>
+          )}
           {activeScan && (
             <p className="text-xs text-muted">
               Scan running — results stream in below as each broker finishes (polling every 4s).
@@ -487,6 +490,17 @@ export default function Home() {
                 className="input-std"
               />
             </label>
+            {/* A disabled button says why in visible text, not a hover tooltip. */}
+            {!contactEmail && (
+              <p className="mt-2 text-xs text-zinc-400">
+                Enter a contact email to prepare requests. Brokers send confirmation links there.
+              </p>
+            )}
+            {setup && !setup.canStartScan && (
+              <p className="mt-2 text-xs text-zinc-400">
+                Requests can be prepared once setup is complete — see the checks above.
+              </p>
+            )}
           </div>
           <div className="space-y-3">
             {confirmedListings.map((l) => {
@@ -839,7 +853,7 @@ function OptOutRow({
       )}
 
       {(!sub || isRelisted || sub.status === "failed" || sub.status === "cancelled") && !isAbsent && (
-        <button className="btn-primary" disabled={!contactEmail || !!busy || !remoteReady} onClick={onPrepare} title={!contactEmail ? "Set a contact email above first" : ""}>
+        <button className="btn-primary" disabled={!contactEmail || !!busy || !remoteReady} onClick={onPrepare}>
           {busy === `p-${listing.id}`
             ? "Filling form (Solari session)…"
             : isRelisted

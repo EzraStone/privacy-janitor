@@ -148,6 +148,17 @@ try {
   await button(card(page, "hint-namesake"), "This is me").waitFor()
   console.log("ok: listing decisions can be undone; WCAG 2.1 AA holds in both views")
 
+  // A disabled button says why, in text anyone can see, not a hover tooltip.
+  assert.ok(await page.getByRole("button", { name: "Run broker scan" }).isDisabled())
+  await page.getByText("Scanning starts once setup is complete").waitFor()
+  assert.ok(await button(row(page, "Queue not started"), "Prepare opt-out").isDisabled())
+  assert.equal(await button(row(page, "Queue not started"), "Prepare opt-out").getAttribute("title"), null)
+  await page.getByText("Enter a contact email to prepare requests").waitFor()
+  await page.getByLabel("Contact email brokers will see").fill("jordan@example.com")
+  assert.equal(await page.getByText("Enter a contact email to prepare requests").count(), 0, "the hint goes once filled")
+  await page.getByText("Requests can be prepared once setup is complete").waitFor()
+  console.log("ok: disabled actions explain themselves")
+
   // Request states: captions, recorded sessions, and the ways out.
   assert.match(await row(page, "Queue prepared").innerText(), /approve before we submit/)
   // The inline preview is clipped; approval must be able to see the whole form.
