@@ -54,6 +54,7 @@ rescan.results = [{ brokerId: "spokeo", ok: true, outcome: "found", listingsFoun
 rescan.events = [
   { listingId: "q-still", brokerId: "spokeo", type: "still_listed", recordedAt: now },
   { listingId: "r-namesake", brokerId: "spokeo", type: "no_longer_seen", recordedAt: now },
+  { listingId: "q-waiting", brokerId: "spokeo", type: "relisted", recordedAt: now },
 ]
 store.finishScanRun(rescan)
 store.closeDb()
@@ -99,7 +100,8 @@ async function wcagViolations(page: Page): Promise<string[]> {
 }
 
 const card = (page: Page, id: string): Locator => page.locator(".card", { has: page.locator(`a[href$="/${id}"]`) })
-const row = (page: Page, name: string): Locator => page.locator(".card", { hasText: name })
+const row = (page: Page, name: string): Locator =>
+  page.locator("section", { hasText: "Opt-out queue" }).locator(".card", { hasText: name })
 const button = (scope: Locator, name: string) => scope.getByRole("button", { name, exact: true })
 
 try {
@@ -163,6 +165,7 @@ try {
   const verification = page.locator(".card", { hasText: "Latest verification" })
   assert.match(await verification.innerText(), /Queue still listed \(1 Synthetic Way, Chicago, IL\) — still listed/)
   assert.doesNotMatch(await verification.innerText(), /Someone Else/)
+  assert.match(await verification.innerText(), /Queue waiting — relisted: it was gone and came back/, "events read as sentences")
   // Brokers appear by name, never by internal id.
   assert.match(await verification.innerText(), /Spokeo: Queue still listed/)
   assert.equal((await card(page, "hint-strong").locator(".eyebrow").innerText()).trim(), "SPOKEO")

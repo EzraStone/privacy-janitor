@@ -1,7 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { Identity, Listing, MatchExplanation, ScanRun, Submission, SubmissionStatus } from "@/types"
+import type {
+  Identity, Listing, MatchExplanation, ScanListingEventType, ScanRun, Submission, SubmissionStatus,
+} from "@/types"
 import type { ExposureReport } from "@/scoring"
 import { activeSubmissionStatuses } from "@/engine/submission-state"
 import type { SetupStatus } from "@/config/setup"
@@ -28,6 +30,17 @@ const statusLabel: Record<SubmissionStatus, string> = {
   removed: "Removed ✓ (verified by re-scan)",
   failed: "Failed — see error",
   cancelled: "Cancelled",
+}
+
+// What each rescan event means for the person reading the diff. Typed, so a
+// new event cannot reach the page as a bare internal name.
+const rescanEventLabel: Record<ScanListingEventType, string> = {
+  new: "new: not seen before",
+  still_listed: "still listed",
+  removed: "removed: verified by this rescan",
+  still_removed: "still removed",
+  relisted: "relisted: it was gone and came back",
+  no_longer_seen: "no longer found; no removal was requested",
 }
 
 export default function Home() {
@@ -531,7 +544,7 @@ export default function Home() {
                     <div key={`${event.brokerId}-${event.listingId}-${event.type}`}>
                       {brokerName(event.brokerId)}: {listing?.displayName ?? "a listing"}
                       {listing?.exposedData.addresses?.[0] ? ` (${listing.exposedData.addresses[0]})` : ""}
-                      {" — "}{event.type.replaceAll("_", " ")}
+                      {" — "}{rescanEventLabel[event.type]}
                     </div>
                   ))}
                 </div>
