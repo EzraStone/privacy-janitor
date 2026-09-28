@@ -245,6 +245,39 @@ try {
   assert.match(await row(page, "Queue prepared").innerText(), /^Queue prepared\nSpokeo\n/)
   console.log("ok: the rescan diff names each listing and skips not-you records")
 
+  // The exposure panel, with Groq's availability and reply simulated in the
+  // browser: no provider is contacted.
+  await page.route("**/api/setup", async (route) => {
+    const response = await route.fetch()
+    await route.fulfill({ response, json: { ...(await response.json()), groq: "configured" } })
+  })
+  await page.route("**/api/actions", async (route) => {
+    if (route.request().postDataJSON()?.action !== "score") return route.continue()
+    await route.fulfill({ json: { report: {
+      totalScore: 64, summary: "Synthetic summary.", generatedAt: "2026-09-20T12:00:00.000Z", model: "synthetic-model",
+      rankings: [
+        { listingId: "q-prepared", brokerId: "spokeo", score: 80, rationale: "Home address visible.", recommendedAction: "Remove first." },
+        { listingId: "hint-contra", brokerId: "spokeo", score: 30, rationale: "No longer yours.", recommendedAction: "None." },
+      ],
+      unrankedListingIds: ["q-fresh"],
+    } } })
+  })
+  await page.getByRole("button", { name: "Recheck setup" }).click()
+  await page.getByRole("button", { name: "Rank my exposure" }).click()
+  const scorePanel = page.locator("section", { hasText: "Exposure score" })
+  await scorePanel.getByText("64/100").waitFor()
+  const scoreText = await scorePanel.innerText()
+  assert.match(scoreText, /ranked Sep 20, 2026 · model synthetic-model/, "a report says when it was made")
+  assert.match(scoreText, /Queue prepared · Spokeo\s+80\/100/)
+  assert.doesNotMatch(scoreText, /No longer yours/, "a stale ranking is left out")
+  assert.match(scoreText, /1 ranked listing\(s\) changed since this report/)
+  assert.match(scoreText, /gave 1 listing\(s\) no usable ranking/)
+  await page.unroute("**/api/setup")
+  await page.unroute("**/api/actions")
+  await page.getByRole("button", { name: "Recheck setup" }).click() // back to the real setup status
+  await page.getByText("replace the example Groq key to enable").waitFor()
+  console.log("ok: the exposure report is dated and set against current listings")
+
   // A crash page or a stopped server reads as that, not as a JSON parse error.
   const failWith = async (handler: (route: import("playwright-core").Route) => Promise<void>) => {
     await page.route("**/api/state", (route) => route.request().method() === "POST" ? handler(route) : route.continue())
@@ -337,7 +370,7 @@ try {
   const framed = attacker.frames().find((frame) => frame !== attacker.mainFrame())
   assert.ok(!(await framed?.locator("body").innerText().catch(() => ""))?.includes("PrivacyJanitor"), "dashboard refused to render in a frame")
   console.log("ok: setup advice, no page errors, and no framing by other sites")
-  console.log("UI checks passed: match hints, undo, WCAG 2.1 AA, request states, rescan diff, broker names, setup advice, framing")
+  console.log("UI checks passed: match hints, undo, WCAG 2.1 AA, request states, rescan diff, broker names, exposure report, setup advice, framing")
 } catch (error) {
   // CI uploads this screenshot so a failure can be seen, not only read; the
   // page only ever holds the synthetic profile above.

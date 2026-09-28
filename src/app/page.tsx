@@ -508,7 +508,8 @@ export default function Home() {
               <p className="text-sm text-zinc-300">
                 Overall exposure:{" "}
                 <span className="font-bold text-white">{report.totalScore}/100</span>
-                <span className="text-muted"> · model {report.model}</span>
+                {/* A report stays on screen across later changes: say when it was made. */}
+                <span className="text-muted"> · ranked {formatDay(report.generatedAt)} · model {report.model}</span>
               </p>
               <p className="text-sm text-zinc-400">{report.summary}</p>
               <div className="space-y-2">
