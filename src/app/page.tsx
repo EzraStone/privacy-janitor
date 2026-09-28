@@ -81,6 +81,9 @@ export default function Home() {
   const [showIdentityForm, setShowIdentityForm] = useState(false)
   const [editingIdentity, setEditingIdentity] = useState<Identity | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // The buttons that open the profile form, to return focus when it closes.
+  const addProfileRef = useRef<HTMLButtonElement>(null)
+  const editProfileRef = useRef<HTMLButtonElement>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -254,7 +257,10 @@ export default function Home() {
           </div>
           <div className="flex gap-2">
             <button
+              ref={addProfileRef}
               className="btn-secondary"
+              aria-expanded={(showIdentityForm && !editingIdentity) || state?.identities.length === 0}
+              aria-controls="profile-form"
               onClick={() => {
                 setEditingIdentity(null)
                 setShowIdentityForm((v) => !v)
@@ -264,7 +270,10 @@ export default function Home() {
             </button>
             {identity && (
               <button
+                ref={editProfileRef}
                 className="btn-secondary"
+                aria-expanded={showIdentityForm && Boolean(editingIdentity)}
+                aria-controls="profile-form"
                 onClick={() => {
                   setEditingIdentity(identity)
                   setShowIdentityForm(true)
@@ -321,11 +330,15 @@ export default function Home() {
           <IdentityForm
             key={editingIdentity?.id ?? "new"}
             existing={editingIdentity}
+            // Opened by a button: take focus. Shown because no profile exists yet: leave it.
+            focusOnOpen={showIdentityForm}
             onCancel={
               state?.identities.length
                 ? () => {
+                    const opener = editingIdentity ? editProfileRef : addProfileRef
                     setShowIdentityForm(false)
                     setEditingIdentity(null)
+                    opener.current?.focus()
                   }
                 : undefined
             }
@@ -632,10 +645,12 @@ export default function Home() {
 
 function IdentityForm({
   existing,
+  focusOnOpen,
   onSave,
   onCancel,
 }: {
   existing: Identity | null
+  focusOnOpen: boolean
   onSave: (i: Partial<Identity>) => Promise<void>
   onCancel?: () => void
 }) {
@@ -649,6 +664,7 @@ function IdentityForm({
 
   return (
     <form
+      id="profile-form"
       className="grid gap-4 border-t border-white/10 pt-5 sm:grid-cols-2"
       onSubmit={async (e) => {
         e.preventDefault()
@@ -668,7 +684,7 @@ function IdentityForm({
     >
       <label className="field-label">
         Full name
-        <input className="input-std" placeholder="First Last" maxLength={100} value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+        <input className="input-std" placeholder="First Last" maxLength={100} autoFocus={focusOnOpen} value={fullName} onChange={(e) => setFullName(e.target.value)} required />
       </label>
       <label className="field-label">
         City

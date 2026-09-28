@@ -241,6 +241,17 @@ try {
   await page.unroute("**/api/state")
   console.log("ok: server errors and a stopped server are named plainly")
 
+  // Opening the profile form moves focus into it; cancelling returns it.
+  const addProfile = page.getByRole("button", { name: "+ Add profile" })
+  assert.equal(await addProfile.getAttribute("aria-expanded"), "false")
+  await addProfile.click()
+  assert.equal(await addProfile.getAttribute("aria-expanded"), "true")
+  assert.equal(await page.evaluate(() => document.activeElement?.closest("label")?.textContent?.trim()), "Full name")
+  await page.locator("#profile-form").getByRole("button", { name: "Cancel", exact: true }).click()
+  assert.equal(await addProfile.getAttribute("aria-expanded"), "false")
+  assert.ok(await addProfile.evaluate((el) => el === document.activeElement), "focus returns to the button that opened the form")
+  console.log("ok: the profile form takes and returns keyboard focus")
+
   // With no key configured, setup advice asks for one.
   assert.match(await page.locator('section[aria-label="Setup checks"]').innerText(), /add your SOLARI_API_KEY/)
   assert.deepEqual(pageErrors, [], "no uncaught page errors")
