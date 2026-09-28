@@ -138,6 +138,8 @@ try {
   assert.match(await card(page, "hint-strong").innerText(), /✓\s*Shares a relative’s name/)
   assert.match(await card(page, "hint-sparse").innerText(), /–\s*No address listed/, "unknown shows as –, not ✗")
   console.log("ok: review cards explain which details match")
+  // The selected profile is conveyed by state, not only by colour.
+  await page.getByRole("button", { name: /^Jordan Example/, pressed: true }).waitFor()
   // The scan panel says what the latest scan found, next to the button that runs one.
   const scanPanel = page.locator("section", { hasText: "Run broker scan" })
   assert.match(await scanPanel.innerText(), new RegExp(`Last rescan finished [A-Z][a-z]{2} \\d{1,2}, \\d{4} — Spokeo: 1 listing`))

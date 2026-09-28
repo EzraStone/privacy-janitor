@@ -296,6 +296,7 @@ export default function Home() {
             {state.identities.map((i) => (
               <button
                 key={i.id}
+                aria-pressed={i.id === activeIdentityId}
                 onClick={() => {
                   setActiveIdentityId(i.id)
                   setReport(null)
