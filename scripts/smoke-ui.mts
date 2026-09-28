@@ -325,6 +325,7 @@ try {
   // At phone width the profile actions wrap instead of pushing the page sideways.
   await page.setViewportSize({ width: 375, height: 800 })
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= 375), "no horizontal scroll at 375px")
+  assert.deepEqual(await wcagViolations(page), [], "WCAG 2.1 AA holds at phone width")
   await page.setViewportSize({ width: 1280, height: 900 })
 
   // Opening the profile form moves focus into it; cancelling returns it.
