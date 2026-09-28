@@ -10,6 +10,8 @@ export interface SetupStatus {
   solari: KeyStatus
   groq: KeyStatus
   storage: { writable: boolean; message: string }
+  /** The sync service whose folder holds local data, if any. Never the path. */
+  syncedFolder: string | null
   providerAccess: "not_checked"
 }
 
@@ -19,6 +21,21 @@ export function keyStatus(value: string | undefined): KeyStatus {
   if (!key) return "missing"
   if (/^(?:slr_live_|gsk_)?x{3,}$/i.test(key) || /^(?:your[-_ ]|replace[-_ ]|changeme|<)/i.test(key)) return "placeholder"
   return "configured"
+}
+
+/**
+ * The sync service whose folder holds `path`, if any: such a service uploads
+ * local data even though Git ignores it. Whole path segments are matched, so
+ * a folder that merely contains a service's name is not flagged.
+ */
+export function syncedFolderService(path: string): string | undefined {
+  for (const segment of path.split(/[\\/]+/)) {
+    if (/^OneDrive(?: - .+)?$/i.test(segment)) return "OneDrive"
+    if (/^Dropbox(?: \(.+\))?$/i.test(segment)) return "Dropbox"
+    if (/^(?:iCloud Drive|Mobile Documents)$/i.test(segment)) return "iCloud Drive"
+    if (/^(?:Google Drive|GoogleDrive-.+|My Drive)$/i.test(segment)) return "Google Drive"
+  }
+  return undefined
 }
 
 /** Creates and removes only a unique, emptyable probe directory under local storage. */
@@ -68,7 +85,11 @@ export function getSetupStatus(options: {
   const solari = keyStatus(env.SOLARI_API_KEY)
   const groq = keyStatus(env.GROQ_API_KEY)
   const storage = (options.storageProbe ?? (() => probeStorage(getDataDir())))()
-  return { canStartScan: supported && solari === "configured" && storage.writable, node: { supported, version }, solari, groq, storage, providerAccess: "not_checked" }
+  const syncedFolder = syncedFolderService(getDataDir()) ?? null
+  return {
+    canStartScan: supported && solari === "configured" && storage.writable,
+    node: { supported, version }, solari, groq, storage, syncedFolder, providerAccess: "not_checked",
+  }
 }
 
 export function requireScanSetup(): void {

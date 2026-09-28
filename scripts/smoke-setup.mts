@@ -4,7 +4,7 @@ import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { getSetupStatus, keyStatus, probeStorage } from "../src/config/setup.ts"
+import { getSetupStatus, keyStatus, probeStorage, syncedFolderService } from "../src/config/setup.ts"
 import { launchResilient } from "../src/engine/solari.ts"
 import type { Solari } from "@solarisdk/browser"
 
@@ -31,6 +31,14 @@ try {
 } finally {
   rmSync(directory, { recursive: true, force: true })
 }
+// A data folder inside a sync service is uploaded by that service, even
+// though Git ignores it. Name the service; never echo the path.
+assert.equal(syncedFolderService("C:\\Users\\jordan\\OneDrive - Contoso\\privacy-janitor\\data"), "OneDrive")
+assert.equal(syncedFolderService("/Users/jordan/Dropbox (Personal)/privacy-janitor/data"), "Dropbox")
+assert.equal(syncedFolderService("/Users/jordan/Library/Mobile Documents/com~apple~CloudDocs/pj/data"), "iCloud Drive")
+assert.equal(syncedFolderService("G:\\My Drive\\privacy-janitor\\data"), "Google Drive")
+assert.equal(syncedFolderService("/home/jordan/privacy-janitor/data"), undefined)
+assert.equal(syncedFolderService("/home/jordan/dropbox-notes/data"), undefined, "a name that merely contains a service")
 let launches = 0
 const denied = { async launch() { launches++; throw new Error("FeatureRequiresPlan: paid plan") } } as unknown as Solari
 await assert.rejects(launchResilient(denied, "fixture"), /provider plan/)
@@ -45,8 +53,15 @@ try {
   })
   assert.match(doctor.stdout, /PrivacyJanitor local setup check/)
   assert.match(doctor.stdout, /Solari key: missing/)
+  assert.doesNotMatch(doctor.stdout, /sync/i, "no warning for a plain folder")
   assert.equal(doctor.status, 1, "a missing key needs attention")
+  const synced = spawnSync(process.execPath, [fileURLToPath(new URL("./run-doctor.mjs", import.meta.url))], {
+    cwd: doctorHome, encoding: "utf8",
+    env: { NODE_ENV: "test", PATH: process.env.PATH ?? "", PJ_DATA_DIR: join(doctorHome, "Dropbox", "data") },
+  })
+  assert.match(synced.stdout, /Local data is inside a Dropbox folder/)
+  assert.ok(!synced.stdout.includes(doctorHome), "the warning names the service, not the path")
 } finally {
   rmSync(doctorHome, { recursive: true, force: true })
 }
-console.log("Setup checks passed: Node, key placeholders, optional scoring, local storage, safe output, provider-plan errors, doctor launcher")
+console.log("Setup checks passed: Node, key placeholders, optional scoring, local storage, safe output, provider-plan errors, synced-folder warning, doctor launcher")

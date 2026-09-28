@@ -11,6 +11,10 @@ console.log(`Node ${status.node.version}: ${status.node.supported ? "supported" 
 console.log(`Solari key: ${status.solari}`)
 console.log(`Groq key: ${status.groq} (optional scoring)`)
 console.log(status.storage.message)
+if (status.syncedFolder) {
+  console.log(`Warning: Local data is inside a ${status.syncedFolder} folder, which uploads it to that service. ` +
+    "Set PJ_DATA_DIR to a private folder outside it; existing data is not moved.")
+}
 console.log("Provider access and plan capabilities: not checked. No browser session was opened.")
 console.log("After changing .env, restart the app. Do not share API keys or local evidence in bug reports.")
 if (!status.canStartScan) {

@@ -348,6 +348,16 @@ try {
 
   // With no key configured, setup advice asks for one.
   assert.match(await page.locator('section[aria-label="Setup checks"]').innerText(), /add your SOLARI_API_KEY/)
+  // A data folder inside a sync service is flagged on the panel, by service name.
+  await page.route("**/api/setup", async (route) => {
+    const response = await route.fetch()
+    await route.fulfill({ response, json: { ...(await response.json()), syncedFolder: "Dropbox" } })
+  })
+  await page.getByRole("button", { name: "Recheck setup" }).click()
+  await page.getByText("Local data is inside a Dropbox folder, which uploads it.").waitFor()
+  await page.unroute("**/api/setup")
+  await page.getByRole("button", { name: "Recheck setup" }).click()
+  await page.getByText("Local data is inside a Dropbox folder").waitFor({ state: "detached" })
   // A key still set to the example value is not "missing": say to replace it.
   assert.match(await page.locator('section[aria-label="Setup checks"]').innerText(), /replace the example Groq key to enable/)
   assert.deepEqual(pageErrors, [], "no uncaught page errors")

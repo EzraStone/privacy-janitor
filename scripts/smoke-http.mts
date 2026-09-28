@@ -46,6 +46,7 @@ try {
   assert.equal(setup.groq, "missing")
   assert.equal(setup.canStartScan, false)
   assert.equal(setup.providerAccess, "not_checked")
+  assert.equal(setup.syncedFolder, null, "a temporary data folder is not synced")
   assert.equal((await fetch(`${base}/api/setup`, { headers: { origin: "https://unrelated.invalid" } })).status, 403)
   assert.equal((await fetch(`${base}/api/setup`, { headers: { "sec-fetch-site": "cross-site" } })).status, 403)
   // Valid JSON that is not an object must be a clean 400, not a crash.

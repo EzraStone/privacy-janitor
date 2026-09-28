@@ -25,6 +25,12 @@ export function SetupPanel({ status, error, checking, onCheck }: {
               <p className="font-medium">Local runtime</p>
               <p className="mt-1 text-zinc-400">{status.node.supported ? `Node ${status.node.version}` : "Install Node.js 24 or newer"}</p>
               <p className="mt-1 text-zinc-400">{status.storage.message}</p>
+              {status.syncedFolder && (
+                <p className="mt-1 text-zinc-200">
+                  Local data is inside a {status.syncedFolder} folder, which uploads it. Set PJ_DATA_DIR to a
+                  private folder outside it.
+                </p>
+              )}
             </div>
             <div className="card">
               <p className="font-medium">Broker connection</p>
