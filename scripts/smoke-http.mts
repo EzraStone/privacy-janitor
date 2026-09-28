@@ -122,6 +122,9 @@ try {
   assert.equal(shot.status, 200)
   assert.equal(shot.headers.get("content-type"), "image/png")
   assert.equal(await evidenceStatus(join(evidence, "run-1", "missing.png")), 404)
+  // Only screenshots are evidence: any other file there is never served.
+  writeFileSync(join(evidence, "run-1", "notes.json"), '{"synthetic":true}')
+  assert.equal(await evidenceStatus(join(evidence, "run-1", "notes.json")), 404, "non-screenshot files are not served")
   assert.equal(await evidenceStatus("../privacy-janitor.db"), 403)
   // A symlink inside the evidence tree must not serve a file from outside it.
   const outside = join(directory, "outside")

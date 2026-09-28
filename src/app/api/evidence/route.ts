@@ -8,7 +8,7 @@ import { failFromError } from "../_lib"
 
 export const dynamic = "force-dynamic"
 
-/** Serve evidence files (screenshots) from data/evidence — local only. */
+/** Serve evidence screenshots from data/evidence — local only, PNG only. */
 export async function GET(req: NextRequest) {
   try {
     assertTrustedLocalRequest(req)
@@ -28,12 +28,16 @@ export async function GET(req: NextRequest) {
     if (!isInsideEvidenceDir(physical)) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 })
     }
+    // Screenshots are the only evidence the dashboard shows; nothing else in
+    // the folder is served, whatever a future debug run might leave there.
+    if (!target.toLowerCase().endsWith(".png")) {
+      return NextResponse.json({ error: "not found" }, { status: 404 })
+    }
 
     const buf = await readFile(physical)
-    const ext = target.endsWith(".png") ? "image/png" : "application/octet-stream"
     return new NextResponse(new Uint8Array(buf), {
       headers: {
-        "content-type": ext,
+        "content-type": "image/png",
         "cache-control": "no-store",
         "x-content-type-options": "nosniff",
       },
