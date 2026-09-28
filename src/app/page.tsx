@@ -85,6 +85,7 @@ export default function Home() {
   const [showIdentityForm, setShowIdentityForm] = useState(false)
   const [editingIdentity, setEditingIdentity] = useState<Identity | null>(null)
   const [showAllScans, setShowAllScans] = useState(false)
+  const [profileError, setProfileError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   // The buttons that open the profile form, to return focus when it closes.
   const addProfileRef = useRef<HTMLButtonElement>(null)
@@ -268,6 +269,7 @@ export default function Home() {
               aria-controls="profile-form"
               onClick={() => {
                 setEditingIdentity(null)
+                setProfileError(null)
                 setShowIdentityForm((v) => !v)
               }}
             >
@@ -281,6 +283,7 @@ export default function Home() {
                 aria-controls="profile-form"
                 onClick={() => {
                   setEditingIdentity(identity)
+                  setProfileError(null)
                   setShowIdentityForm(true)
                 }}
               >
@@ -347,23 +350,30 @@ export default function Home() {
               state?.identities.length
                 ? () => {
                     const opener = editingIdentity ? editProfileRef : addProfileRef
+                    setProfileError(null)
                     setShowIdentityForm(false)
                     setEditingIdentity(null)
                     opener.current?.focus()
                   }
                 : undefined
             }
+            error={profileError}
+            // A rejected save is explained in the form, beside the fields to fix,
+            // not in the banner at the top of the page.
             onSave={async (i) => {
-              const res = await stateAction(
-                { action: "save-identity", identity: i },
-                "identity",
-              )
-              const saved = res?.identity as Identity | undefined
-              if (saved) {
-                setActiveIdentityId(saved.id)
+              setProfileError(null)
+              setBusy("identity")
+              try {
+                const res = await requestJson("/api/state", { action: "save-identity", identity: i })
+                await refresh()
+                setActiveIdentityId((res.identity as Identity).id)
                 setReport(null)
                 setShowIdentityForm(false)
                 setEditingIdentity(null)
+              } catch (e) {
+                setProfileError(e instanceof Error ? e.message : "Could not save the profile.")
+              } finally {
+                setBusy(null)
               }
             }}
           />
@@ -680,11 +690,13 @@ export default function Home() {
 function IdentityForm({
   existing,
   focusOnOpen,
+  error,
   onSave,
   onCancel,
 }: {
   existing: Identity | null
   focusOnOpen: boolean
+  error: string | null
   onSave: (i: Partial<Identity>) => Promise<void>
   onCancel?: () => void
 }) {
@@ -758,6 +770,7 @@ function IdentityForm({
           If you change the name or location, run a new scan so saved matches can be refreshed.
         </p>
       )}
+      {error && <p role="alert" className="text-sm text-zinc-200 sm:col-span-2">{error}</p>}
       <div className="flex gap-2 sm:col-span-2">
         <button className="btn-primary" disabled={saving || !fullName || !city || !stateCode || !consent}>
           {saving ? "Saving…" : existing ? "Save changes" : "Add profile"}

@@ -288,6 +288,17 @@ try {
   await addProfile.click()
   assert.equal(await addProfile.getAttribute("aria-expanded"), "true")
   assert.equal(await page.evaluate(() => document.activeElement?.closest("label")?.textContent?.trim()), "Full name")
+  // A rejected save is explained inside the form, where the fix is made.
+  const profileForm = page.locator("#profile-form")
+  await profileForm.getByLabel("Full name", { exact: true }).fill("Riley Sample")
+  await profileForm.getByLabel("City", { exact: true }).fill("Austin")
+  await profileForm.getByLabel("State", { exact: true }).fill("TX")
+  await profileForm.getByLabel(/^Age range/).fill("45-40")
+  await profileForm.getByRole("checkbox").check()
+  await profileForm.getByRole("button", { name: "Add profile", exact: true }).click()
+  await profileForm.getByRole("alert").filter({ hasText: "40-45" }).waitFor()
+  assert.equal(await page.getByRole("alert").filter({ hasText: "Something went wrong" }).filter({ hasText: "40-45" }).count(), 0,
+    "not in the banner above")
   await page.locator("#profile-form").getByRole("button", { name: "Cancel", exact: true }).click()
   assert.equal(await addProfile.getAttribute("aria-expanded"), "false")
   assert.ok(await addProfile.evaluate((el) => el === document.activeElement), "focus returns to the button that opened the form")
