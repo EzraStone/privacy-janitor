@@ -150,6 +150,11 @@ try {
 
   // Request states: captions, recorded sessions, and the ways out.
   assert.match(await row(page, "Queue prepared").innerText(), /approve before we submit/)
+  // The inline preview is clipped; approval must be able to see the whole form.
+  const fullPreview = row(page, "Queue prepared").getByRole("link", { name: "Open the full preview" })
+  assert.equal(await fullPreview.getAttribute("target"), "_blank")
+  const previewResponse = await page.request.get(new URL((await fullPreview.getAttribute("href"))!, base).href)
+  assert.equal(previewResponse.headers()["content-type"], "image/png", "the link opens the evidence image")
   const waitingRow = row(page, "Queue waiting")
   assert.doesNotMatch(await waitingRow.innerText(), /approve before we submit/, "only a pending preview asks for approval")
   assert.match(await waitingRow.innerText(), /Recorded Solari sessions — submit sess_submit_W/)

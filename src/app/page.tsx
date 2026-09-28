@@ -764,6 +764,19 @@ function ListingCard({
   )
 }
 
+// Inline screenshots are clipped to keep the queue scannable, so each links to
+// the whole image: a person approving a request must be able to see all of it.
+function EvidenceShot({ path, alt, linkText }: { path: string; alt: string; linkText: string }) {
+  const src = `/api/evidence?file=${encodeURIComponent(path.replace(/\\/g, "/"))}`
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt={alt} className="max-h-96 w-full rounded-lg border border-white/10 object-cover object-top" />
+      <a href={src} target="_blank" rel="noopener noreferrer" className="link-std inline-block text-xs">{linkText}</a>
+    </>
+  )
+}
+
 function OptOutRow({
   listing, broker, sub, busy, remoteReady, contactEmail, confirmUrl, onConfirmUrlChange,
   onPrepare, onApprove, onCancel, onConfirmEmail, onReviewAgain, onReopen,
@@ -825,12 +838,7 @@ function OptOutRow({
               ? "Filled form preview — approve before we submit:"
               : "Form preview from this request:"}
           </p>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`/api/evidence?file=${encodeURIComponent(sub.previewScreenshotPath.replace(/\\/g, "/"))}`}
-            alt="opt-out form preview"
-            className="max-h-96 w-full rounded-lg border border-white/10 object-cover object-top"
-          />
+          <EvidenceShot path={sub.previewScreenshotPath} alt="opt-out form preview" linkText="Open the full preview" />
         </div>
       )}
 
@@ -930,12 +938,7 @@ function OptOutRow({
       {sub?.resultScreenshotPath && (
         <div className="space-y-1">
           <p className="text-zinc-400">Submit result:</p>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`/api/evidence?file=${encodeURIComponent(sub.resultScreenshotPath.replace(/\\/g, "/"))}`}
-            alt="opt-out result"
-            className="max-h-96 w-full rounded-lg border border-white/10 object-cover object-top"
-          />
+          <EvidenceShot path={sub.resultScreenshotPath} alt="opt-out result" linkText="Open the full result page" />
         </div>
       )}
     </div>
