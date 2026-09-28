@@ -774,6 +774,10 @@ function ListingCard({
   )
 }
 
+function formatDay(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" })
+}
+
 // Inline screenshots are clipped to keep the queue scannable, so each links to
 // the whole image: a person approving a request must be able to see all of it.
 function EvidenceShot({ path, alt, linkText }: { path: string; alt: string; linkText: string }) {
@@ -827,6 +831,14 @@ function OptOutRow({
                 : "Not started"}
         </div>
       </div>
+
+      {/* Brokers take days; "no email after a day or two?" needs a date to count from. */}
+      {sub && (
+        <p className="text-xs text-muted">
+          Started {formatDay(sub.createdAt)}
+          {formatDay(sub.updatedAt) !== formatDay(sub.createdAt) && ` · last change ${formatDay(sub.updatedAt)}`}
+        </p>
+      )}
 
       {sub?.lastError && <div className="border-l border-white/30 pl-3 text-xs text-zinc-400">{sub.lastError}</div>}
 

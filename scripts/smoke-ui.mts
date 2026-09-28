@@ -9,6 +9,7 @@ import { spawn } from "node:child_process"
 import { once } from "node:events"
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
+import { DatabaseSync } from "node:sqlite"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { chromium, type Browser, type Locator, type Page } from "playwright-core"
@@ -58,6 +59,11 @@ rescan.events = [
 ]
 store.finishScanRun(rescan)
 store.closeDb()
+// The waiting request started three days ago; the store stamps only "now".
+const backdated = new Date(Date.now() - 3 * 86_400_000).toISOString()
+const db = new DatabaseSync(join(directory, "privacy-janitor.db"))
+db.prepare("UPDATE submissions SET created_at = ? WHERE id = ?").run(backdated, waiting.id)
+db.close()
 
 // ── browser first: skip locally without one, but never silently in CI ──────
 let browser: Browser
@@ -169,6 +175,11 @@ try {
   const waitingRow = row(page, "Queue waiting")
   assert.doesNotMatch(await waitingRow.innerText(), /approve before we submit/, "only a pending preview asks for approval")
   assert.match(await waitingRow.innerText(), /Recorded Solari sessions — submit sess_submit_W/)
+  // "No email after a day or two?" needs a date to count from.
+  const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { dateStyle: "medium" })
+  assert.match(await waitingRow.innerText(), new RegExp(`Started ${day(backdated)} · last change ${day(now)}`))
+  assert.match(await row(page, "Queue prepared").innerText(), new RegExp(`Started ${day(now)}\n`), "one date when nothing changed since")
+  assert.doesNotMatch(await row(page, "Queue not started").innerText(), /Started/, "no date before any request")
   await button(waitingRow, "Close attempt locally").click()
   await waitingRow.getByText("Cancelled").waitFor()
   const stillRow = row(page, "Queue still listed")
