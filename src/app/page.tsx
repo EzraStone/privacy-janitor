@@ -618,7 +618,7 @@ function IdentityForm({
       </label>
       <label className="field-label">
         Age range <span className="font-normal text-muted">Optional</span>
-        <input className="input-std" placeholder="25-30" value={ageRange} onChange={(e) => setAgeRange(e.target.value)} />
+        <input className="input-std" placeholder="40-45" value={ageRange} onChange={(e) => setAgeRange(e.target.value)} />
       </label>
       <label className="field-label sm:col-span-2">
         Relatives <span className="font-normal text-muted">Optional, full names, comma-separated</span>

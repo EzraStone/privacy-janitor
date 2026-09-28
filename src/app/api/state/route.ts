@@ -6,6 +6,7 @@ import { optOuts } from "@/engine/optouts"
 import { matchHintsFor } from "@/engine/match-hints"
 import { listEvidenceEntries, removeEvidencePaths } from "@/engine/cleanup"
 import type { Identity } from "@/types"
+import { normalizeAgeRange } from "@/profile"
 import { assertTrustedLocalRequest } from "@/security/requests"
 import { keyStatus, requireScanSetup } from "@/config/setup"
 
@@ -67,6 +68,8 @@ export async function POST(req: NextRequest) {
           return fail("relatives must be a list of names")
         }
         const relatives = i.relatives?.map((r) => r.trim()).filter(Boolean)
+        const ageRange = normalizeAgeRange(text(i.ageRange))
+        if (ageRange === null) return fail("ageRange must be a range such as 40-45, from 18 to 119")
         // An id means an edit. The profile must still exist — a stale form in
         // another tab must not recreate one that was deleted — and its stored
         // creation time stands, whatever the form sends.
@@ -78,7 +81,7 @@ export async function POST(req: NextRequest) {
           fullName,
           city,
           stateCode,
-          ageRange: text(i.ageRange) || undefined,
+          ageRange,
           relatives: relatives?.length ? relatives : undefined,
           createdAt: existing?.createdAt ?? new Date().toISOString(),
         }

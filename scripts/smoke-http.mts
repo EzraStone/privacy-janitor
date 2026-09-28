@@ -71,13 +71,18 @@ try {
   assert.equal(await saveStatus({ stateCode: "Illinois" }), 400, "state must be a two-letter code")
   assert.equal(await saveStatus({ relatives: "Casey Example" }), 400, "relatives must be a list")
   assert.equal(await saveStatus({ relatives: ["Casey", 7] }), 400, "relatives must be names")
+  // An age range the match hints cannot read would silently count as unknown.
+  for (const ageRange of ["abc", "25 to 30", "30-25", "42", "10-20", "40-150"]) {
+    assert.equal(await saveStatus({ ageRange }), 400, `age range "${ageRange}" rejected`)
+  }
   const tidy = await post("/api/state", { action: "save-identity", identity: {
-    fullName: "  Jordan Example ", city: " Chicago", stateCode: "il ", relatives: ["  ", " Casey Example "],
+    fullName: "  Jordan Example ", city: " Chicago", stateCode: "il ", relatives: ["  ", " Casey Example "], ageRange: " 40 – 45 ",
   } })
   assert.equal(tidy.status, 200)
   const tidied = (await tidy.json()).identity
   assert.deepEqual([tidied.fullName, tidied.city, tidied.stateCode], ["Jordan Example", "Chicago", "IL"])
   assert.deepEqual(tidied.relatives, ["Casey Example"], "blank relatives dropped, names trimmed")
+  assert.equal(tidied.ageRange, "40-45", "age range spacing and dashes normalized")
   // An edit keeps the stored creation time, whatever the form sends.
   const edited = await post("/api/state", { action: "save-identity", identity: {
     id: tidied.id, createdAt: "1999-01-01T00:00:00.000Z", fullName: "Jordan Example", city: "Evanston", stateCode: "IL",
