@@ -24,19 +24,33 @@ export async function GET(req: NextRequest) {
     }
     const listings = store.listListings()
     // Link only to screenshots that exist: a failed capture leaves none.
+    const shotIn = (folder?: string) => {
+      const shot = folder && join(folder, `${SCAN_SCREENSHOT}.png`)
+      return shot && existsSync(shot) ? shot : undefined
+    }
     const searchScreenshots: Record<string, string> = {}
     for (const listing of listings) {
-      const shot = listing.screenshotPath && join(listing.screenshotPath, `${SCAN_SCREENSHOT}.png`)
-      if (shot && existsSync(shot)) searchScreenshots[listing.id] = shot
+      const shot = shotIn(listing.screenshotPath)
+      if (shot) searchScreenshots[listing.id] = shot
+    }
+    const scans = store.listScanRuns()
+    // Keyed "<scan id>:<broker id>": what each broker showed in each scan.
+    const resultScreenshots: Record<string, string> = {}
+    for (const run of scans) {
+      for (const result of run.results) {
+        const shot = shotIn(result.evidenceDir)
+        if (shot) resultScreenshots[`${run.id}:${result.brokerId}`] = shot
+      }
     }
     return ok({
       identities: store.listIdentities(),
       listings,
       matchHints: matchHintsFor(listings, store.getIdentity),
       submissions: store.listSubmissions(),
-      scans: store.listScanRuns(),
+      scans,
       brokers: adapters.map(({ id, name }) => ({ id, name })),
       searchScreenshots,
+      resultScreenshots,
     })
   } catch (err) {
     return failFromError(err)

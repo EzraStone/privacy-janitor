@@ -58,7 +58,7 @@ for (let n = 0; n < 6; n++) store.finishScanRun(store.createScanRun("id_ui", "sc
 // A finished rescan: one of your listings, one namesake you already rejected.
 listing("r-namesake", "Someone Else", false, { presenceStatus: "absent" })
 const rescan = store.createScanRun("id_ui", "rescan")
-rescan.results = [{ brokerId: "spokeo", ok: true, outcome: "found", listingsFound: 1 }]
+rescan.results = [{ brokerId: "spokeo", ok: true, outcome: "found", listingsFound: 1, evidenceDir: searchRun }]
 rescan.events = [
   { listingId: "q-still", brokerId: "spokeo", type: "still_listed", recordedAt: now },
   { listingId: "r-namesake", brokerId: "spokeo", type: "no_longer_seen", recordedAt: now },
@@ -262,6 +262,10 @@ try {
   const history = page.locator("section", { hasText: "Scan history" })
   assert.equal(await history.locator(".card").count(), 5)
   assert.match(await history.locator(".card").first().innerText(), /· rescan —/, "newest scan first")
+  // Each broker result links to what the broker showed; the scans without evidence do not.
+  const resultShot = history.locator(".card").first().getByRole("link", { name: "Spokeo results screenshot" })
+  assert.equal((await page.request.get(new URL((await resultShot.getAttribute("href"))!, base).href)).status(), 200)
+  assert.equal(await history.getByRole("link").count(), 1, "no links to missing evidence")
   await history.getByRole("button", { name: "Show all 7 scans" }).click()
   assert.equal(await history.locator(".card").count(), 7)
   console.log("ok: scan history stays short until expanded")

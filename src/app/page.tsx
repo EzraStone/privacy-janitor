@@ -19,6 +19,8 @@ interface StateResponse {
   brokers?: Array<{ id: string; name: string }>
   /** Listing id to the screenshot of the search results it was found in. */
   searchScreenshots?: Record<string, string>
+  /** "<scan id>:<broker id>" to the screenshot of what that broker showed. */
+  resultScreenshots?: Record<string, string>
 }
 
 const statusLabel: Record<SubmissionStatus, string> = {
@@ -649,6 +651,15 @@ export default function Home() {
                       {r.outcome === "inconclusive" ? "⚠" : "✓"} {brokerName(r.brokerId)}: {r.outcome}
                       {r.outcome === "found" ? ` — ${r.listingsFound} listing(s)` : ""}
                       {r.error ? ` — ${r.error}` : ""}
+                      {state?.resultScreenshots?.[`${s.id}:${r.brokerId}`] && (
+                        <>
+                          {" — "}
+                          <a href={evidenceUrl(state.resultScreenshots[`${s.id}:${r.brokerId}`])} target="_blank"
+                            rel="noopener noreferrer" className="link-std">
+                            {brokerName(r.brokerId)} results screenshot
+                          </a>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
