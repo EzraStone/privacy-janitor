@@ -378,40 +378,9 @@ export function deleteIdentity(identityId: string): string[] {
       .all(identityId) as Array<{ id: string }>
 
     for (const { id } of listings) {
-      // collect evidence paths + prepared state before deleting rows
-      const submissions = db
-        .prepare(
-          "SELECT preview_screenshot_path, result_screenshot_path, confirm_evidence_dir FROM submissions WHERE listing_id = ?",
-        )
-        .all(id) as Array<Record<string, unknown>>
-      for (const sub of submissions) {
-        for (const k of ["preview_screenshot_path", "result_screenshot_path", "confirm_evidence_dir"]) {
-          const p = sub[k] as string | null
-          if (p) evidenceDirs.push(p)
-        }
-      }
-      const prepared = db
-        .prepare("SELECT state FROM prepared_optouts WHERE listing_id = ?")
-        .get(id) as { state?: string } | undefined
-      if (prepared?.state) {
-        try {
-          const state = JSON.parse(prepared.state) as Record<string, string>
-          if (state.previewPath) evidenceDirs.push(state.previewPath)
-          if (state.sessionEvidenceDir) evidenceDirs.push(state.sessionEvidenceDir)
-        } catch {
-          /* malformed state — nothing to collect */
-        }
-      }
+      collectListingEvidence(db, id, evidenceDirs)
       db.prepare("DELETE FROM submissions WHERE listing_id = ?").run(id)
       db.prepare("DELETE FROM prepared_optouts WHERE listing_id = ?").run(id)
-    }
-
-    // listing-level evidence dirs (scan screenshots)
-    const listingDirs = db
-      .prepare("SELECT screenshot_path FROM listings WHERE identity_id = ?")
-      .all(identityId) as Array<{ screenshot_path: string | null }>
-    for (const row of listingDirs) {
-      if (row.screenshot_path) evidenceDirs.push(row.screenshot_path)
     }
     collectScanEvidence(
       db.prepare("SELECT results FROM scan_runs WHERE identity_id = ?").all(identityId) as Array<{
@@ -444,36 +413,8 @@ export function resetAll(): { evidenceDirs: string[] } {
 
   db.exec("BEGIN")
   try {
-    const listings = db.prepare("SELECT id, screenshot_path FROM listings").all() as Array<{
-      id: string
-      screenshot_path: string | null
-    }>
-    for (const l of listings) {
-      if (l.screenshot_path) evidenceDirs.push(l.screenshot_path)
-      const submissions = db
-        .prepare(
-          "SELECT preview_screenshot_path, result_screenshot_path, confirm_evidence_dir FROM submissions WHERE listing_id = ?",
-        )
-        .all(l.id) as Array<Record<string, unknown>>
-      for (const sub of submissions) {
-        for (const k of ["preview_screenshot_path", "result_screenshot_path", "confirm_evidence_dir"]) {
-          const p = sub[k] as string | null
-          if (p) evidenceDirs.push(p)
-        }
-      }
-      const prepared = db.prepare("SELECT state FROM prepared_optouts WHERE listing_id = ?").get(l.id) as
-        | { state?: string }
-        | undefined
-      if (prepared?.state) {
-        try {
-          const state = JSON.parse(prepared.state) as Record<string, string>
-          if (state.previewPath) evidenceDirs.push(state.previewPath)
-          if (state.sessionEvidenceDir) evidenceDirs.push(state.sessionEvidenceDir)
-        } catch {
-          /* ignore */
-        }
-      }
-    }
+    const listings = db.prepare("SELECT id FROM listings").all() as Array<{ id: string }>
+    for (const { id } of listings) collectListingEvidence(db, id, evidenceDirs)
     collectScanEvidence(
       db.prepare("SELECT results FROM scan_runs").all() as Array<{ results: string }>,
       evidenceDirs,
@@ -489,6 +430,36 @@ export function resetAll(): { evidenceDirs: string[] } {
   } catch (err) {
     db.exec("ROLLBACK")
     throw err
+  }
+}
+
+/**
+ * Every evidence path one listing's records point at: its scan screenshot
+ * folder, each attempt's screenshots and confirmation folder, and a pending
+ * preview. Read before the rows are deleted; the caller removes the files
+ * after the transaction commits.
+ */
+function collectListingEvidence(db: DatabaseSync, listingId: string, target: string[]): void {
+  const listing = db.prepare("SELECT screenshot_path FROM listings WHERE id = ?").get(listingId) as
+    | { screenshot_path: string | null }
+    | undefined
+  if (listing?.screenshot_path) target.push(listing.screenshot_path)
+  const submissions = db
+    .prepare("SELECT preview_screenshot_path, result_screenshot_path, confirm_evidence_dir FROM submissions WHERE listing_id = ?")
+    .all(listingId) as Array<Record<string, string | null>>
+  for (const submission of submissions) {
+    for (const path of Object.values(submission)) if (path) target.push(path)
+  }
+  const prepared = db.prepare("SELECT state FROM prepared_optouts WHERE listing_id = ?").get(listingId) as
+    | { state?: string }
+    | undefined
+  if (!prepared?.state) return
+  try {
+    const state = JSON.parse(prepared.state) as Record<string, string>
+    if (state.previewPath) target.push(state.previewPath)
+    if (state.sessionEvidenceDir) target.push(state.sessionEvidenceDir)
+  } catch {
+    /* malformed state has no recoverable path */
   }
 }
 

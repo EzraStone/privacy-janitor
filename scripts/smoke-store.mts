@@ -310,7 +310,22 @@ check(
 )
 
 console.log("smoke: delete-identity is transactional")
+// Every evidence path a listing's records hold must be collected for cleanup:
+// each attempt's screenshots and confirmation folder, and a pending preview.
+const attemptEvidence = (name: string) => join(tempRoot, "evidence", name)
+store.updateSubmission(sub.id, {
+  previewScreenshotPath: attemptEvidence("prepare/optout-preview.png"),
+  resultScreenshotPath: attemptEvidence("submit/optout-result.png"),
+  confirmEvidenceDir: attemptEvidence("confirm"),
+})
+store.savePreparedOptOut({
+  submissionId: sub.id, listingId: "lst_s1", brokerId: "whitepages", createdAt: new Date().toISOString(),
+  state: { previewPath: attemptEvidence("pending/optout-preview.png"), sessionEvidenceDir: attemptEvidence("pending") },
+})
 const dirs1 = store.deleteIdentity("id_smoke1")
+check("every attempt and preview evidence path is collected", [
+  "prepare/optout-preview.png", "submit/optout-result.png", "confirm", "pending/optout-preview.png", "pending",
+].every((name) => dirs1.includes(attemptEvidence(name))))
 check("identity gone", store.getIdentity("id_smoke1") === undefined)
 check("its listings gone", store.listListings("id_smoke1").length === 0)
 check("its submissions gone", store.listSubmissions("lst_s1").length === 0)
@@ -344,7 +359,10 @@ check("second unfinished scan is rejected", (() => {
 store.finishScanRun(activeScan)
 
 console.log("smoke: reset-all")
-store.resetAll()
+const lastAttempt = store.createSubmission("lst_s2")
+store.updateSubmission(lastAttempt.id, { resultScreenshotPath: attemptEvidence("submit-2/optout-result.png") })
+const { evidenceDirs: resetDirs } = store.resetAll()
+check("reset collects attempt evidence too", resetDirs.includes(attemptEvidence("submit-2/optout-result.png")))
 check("all identities gone", store.listIdentities().length === 0)
 check("all listings gone", store.listListings().length === 0)
 check("all submissions gone", store.listSubmissions().length === 0)
