@@ -198,7 +198,7 @@ CI uploads one as an artifact.
 
 The other diagnostic scripts under `scripts/` may contact providers and brokers. Read them
 before running; they are not part of the offline test suite and may incur charges or save
-sensitive debugging output.
+sensitive debugging output. [`scripts/README.md`](scripts/README.md) says which is which.
 
 ### Next development milestones
 
