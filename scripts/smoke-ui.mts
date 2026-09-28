@@ -48,6 +48,8 @@ listing("q-still", "Queue still listed", true, { exposedData: { addresses: ["1 S
 const still = store.createSubmission("q-still")
 store.updateSubmission(still.id, { status: "confirmed" })
 listing("q-fresh", "Queue not started", true)
+// Six earlier scans, so the history has more than it shows at first.
+for (let n = 0; n < 6; n++) store.finishScanRun(store.createScanRun("id_ui", "scan"))
 // A finished rescan: one of your listings, one namesake you already rejected.
 listing("r-namesake", "Someone Else", false, { presenceStatus: "absent" })
 const rescan = store.createScanRun("id_ui", "rescan")
@@ -240,6 +242,14 @@ try {
   await page.getByRole("alert").filter({ hasText: "Could not reach the local app" }).waitFor()
   await page.unroute("**/api/state")
   console.log("ok: server errors and a stopped server are named plainly")
+
+  // History shows the latest five scans until asked for all of them.
+  const history = page.locator("section", { hasText: "Scan history" })
+  assert.equal(await history.locator(".card").count(), 5)
+  assert.match(await history.locator(".card").first().innerText(), /· rescan —/, "newest scan first")
+  await history.getByRole("button", { name: "Show all 7 scans" }).click()
+  assert.equal(await history.locator(".card").count(), 7)
+  console.log("ok: scan history stays short until expanded")
 
   // Opening the profile form moves focus into it; cancelling returns it.
   const addProfile = page.getByRole("button", { name: "+ Add profile" })

@@ -80,6 +80,7 @@ export default function Home() {
   const [activeIdentityId, setActiveIdentityId] = useState<string | null>(null)
   const [showIdentityForm, setShowIdentityForm] = useState(false)
   const [editingIdentity, setEditingIdentity] = useState<Identity | null>(null)
+  const [showAllScans, setShowAllScans] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   // The buttons that open the profile form, to return focus when it closes.
   const addProfileRef = useRef<HTMLButtonElement>(null)
@@ -619,7 +620,8 @@ export default function Home() {
           <p className="eyebrow">Activity</p>
           <h2 className="text-xl font-semibold tracking-tight">Scan history — {identity.fullName}</h2>
           <div className="space-y-2 text-sm">
-            {[...scopedScans].reverse().map((s) => (
+            {/* Newest first, as the API returns them; the latest five until asked. */}
+            {(showAllScans ? scopedScans : scopedScans.slice(0, 5)).map((s) => (
               <div key={s.id} className="card">
                 <div className="text-zinc-300">
                   {new Date(s.startedAt).toLocaleString()} · {s.kind} —{" "}
@@ -637,6 +639,11 @@ export default function Home() {
               </div>
             ))}
           </div>
+          {!showAllScans && scopedScans.length > 5 && (
+            <button className="btn-secondary" onClick={() => setShowAllScans(true)}>
+              Show all {scopedScans.length} scans
+            </button>
+          )}
         </section>
       )}
     </main>
