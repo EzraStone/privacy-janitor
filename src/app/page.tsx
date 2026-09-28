@@ -867,7 +867,7 @@ function ListingCard({
   const e = listing.exposedData
   return (
     <div className="card space-y-2 text-sm">
-      <div className="font-semibold tracking-tight">{listing.displayName}</div>
+      <h3 className="font-semibold tracking-tight">{listing.displayName}</h3>
       <div className="eyebrow">{broker}</div>
       {/* Emoji mark each detail for the eye; assistive technology hears the word. */}
       {e.addresses?.length ? (
@@ -974,7 +974,7 @@ function OptOutRow({
     <div className="card space-y-3 text-sm">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <div className="font-medium">{listing.displayName}</div>
+          <h3 className="font-medium">{listing.displayName}</h3>
           <div className="text-zinc-400">{broker}</div>
         </div>
         <div className={sub?.status === "failed" ? "text-muted" : sub?.status === "removed" ? "text-white" : "text-zinc-400"}>

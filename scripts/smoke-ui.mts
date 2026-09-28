@@ -152,6 +152,9 @@ try {
   assert.match(await headline("hint-sparse"), /Too few details/)
   assert.match(await card(page, "hint-strong").innerText(), /✓\s*Shares a relative’s name/)
   assert.match(await card(page, "hint-sparse").innerText(), /–\s*No address listed/, "unknown shows as –, not ✗")
+  // Each card is headed by its listing's name, so cards can be jumped between.
+  await page.getByRole("heading", { level: 3, name: "Jordan A Example" }).waitFor()
+  await page.locator("section", { hasText: "Opt-out queue" }).getByRole("heading", { level: 3, name: "Queue prepared" }).waitFor()
   // Emoji mark each detail visually; assistive technology hears words instead.
   const strongCard = await card(page, "hint-strong").ariaSnapshot()
   assert.match(strongCard, /Address: 742 Evergreen Terrace/)
