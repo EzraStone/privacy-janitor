@@ -111,6 +111,20 @@ does not establish access to these capabilities.
 If the provider rejects the requested capabilities, the app stops with setup guidance;
 it does not silently open a second, less capable session.
 
+## Troubleshooting
+
+| You see | What to do |
+|---------|------------|
+| Scanning or preparing waits for setup | Follow the setup panel, or run `npm run doctor`. Restart the app after editing `.env`. |
+| "Replace the example … key" | `.env` still holds the value from `.env.example`; paste your real key and restart. |
+| "Your Solari provider plan does not support …" | Your plan lacks stealth, residential proxy, CAPTCHA or recording access. Check the Solari console; no fallback browser was opened. |
+| A broker result is **inconclusive** | Open its results screenshot from scan history: usually a challenge page or an unfamiliar layout. Nothing was counted as removed; rescan later. |
+| "Review needed — outcome uncertain" | The broker may already have the request. Check your inbox and the broker site before acknowledging a retry. |
+| No confirmation email after a day or two | Check spam; links can expire. Close the attempt locally and prepare a new one. |
+| "Local data is inside a … folder" | Set `PJ_DATA_DIR` to a private folder outside the sync service and restart. |
+| "Could not reach the local app" | The server stopped. Start it again with `npm run dev`; your data stays in `data/`. |
+| `smoke:ui` says it skipped | Install Chromium with `npx playwright-core install chromium`, or set `PJ_UI_CHROMIUM`. |
+
 ## Broker coverage
 
 | Broker | Implemented flow | Automated validation |
