@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
         const existing = i.id === undefined ? undefined : store.getIdentity(i.id)
         if (i.id !== undefined && !existing) return fail("profile not found", 404)
         const identity: Identity = {
-          id: existing?.id ?? `id_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+          id: existing?.id ?? store.newId("id"),
           fullName,
           city,
           stateCode,

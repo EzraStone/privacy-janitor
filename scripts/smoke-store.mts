@@ -358,6 +358,12 @@ check("jailed path removed", cleanup.removeEvidencePath(join(tempRoot, "evidence
 check("outside path refused", cleanup.removeEvidencePath(join(tmpdir(), "some-other-file.txt")) === false)
 check("evidence root itself refused", cleanup.removeEvidencePath(join(tempRoot, "evidence")) === false)
 
+// A new profile is saved by upsert, so a colliding id would silently
+// overwrite someone else's record: ids carry 64 bits of crypto randomness.
+const generated = Array.from({ length: 10_000 }, () => store.newId("id"))
+check("record ids are unique", new Set(generated).size === generated.length)
+check("record ids carry a 64-bit random suffix", generated.every((id) => /^id_[0-9a-z]+[0-9a-f]{16}$/.test(id)))
+
 // A lexically-jailed path can still escape through a symlinked directory:
 // evidence/linked/secret.txt resolves outside the jail if "linked" points out.
 const outside = join(tempRoot, "outside")

@@ -7,6 +7,7 @@
  * native-build dependencies — `npm install` just works on any OS.
  */
 import { DatabaseSync } from "node:sqlite"
+import { randomBytes } from "node:crypto"
 import { chmodSync, closeSync, mkdirSync, openSync } from "node:fs"
 import { dirname } from "node:path"
 import { getDatabasePath } from "../config/paths.ts"
@@ -304,9 +305,10 @@ export function closeDb(): void {
   }
 }
 
+/** Local record ids. A new profile is saved by upsert, so a colliding id
+ *  would silently overwrite another record: use crypto randomness. */
 export function newId(prefix: string): string {
-  const rand = Math.random().toString(36).slice(2, 10)
-  return `${prefix}_${Date.now().toString(36)}${rand}`
+  return `${prefix}_${Date.now().toString(36)}${randomBytes(8).toString("hex")}`
 }
 
 // ── identities ──────────────────────────────────────────────────────────────
