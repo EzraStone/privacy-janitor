@@ -42,14 +42,17 @@ user data, live broker results, or live submissions are included in these reposi
 1. **Add a profile** — use your own details or those of someone who authorized you.
 2. **Scan and review** — search the supported brokers, then confirm which listings are yours.
    Each card notes which details match your profile; name and city alone are flagged as
-   something a namesake could share. A misclicked decision can go back to review until a
-   removal request is sent.
+   something a namesake could share, and links to a screenshot of the search results it was
+   found in. A misclicked decision can go back to review until a removal request is sent.
 3. **Rank exposure (optional)** — send tokenized listing fields to Groq for a suggested priority.
    The report you read shows your real values again, restored on this machine.
 4. **Preview and approve** — inspect the filled form before authorizing the removal request.
 5. **Confirm and recheck** — complete the broker's email step, then run a later rescan.
    If the email never arrives, close the attempt and start again; if a rescan still finds
-   the listing after your request, you can request removal again.
+   the listing after your request, you can request removal again. The queue dates each
+   request and counts what still needs you.
+6. **Keep your records** — **Download records** saves a profile's findings, decisions,
+   requests and scans as a JSON file ([format](docs/records-format.md)).
 
 ### Built for review, not blind automation
 
@@ -60,6 +63,7 @@ user data, live broker results, or live submissions are included in these reposi
 - **Recoverable work:** progress and approvals persist locally. Duplicate approvals reuse one
   attempt. Interrupted broker actions require review before an explicit retry.
 - **Evidence:** local screenshots and remote session identifiers help review what happened.
+  Each listing and scan result links to the broker page it came from, captured at scan time.
   Solari replay availability depends on the provider; failed runs may have incomplete evidence.
 - **Profile-scoped history:** rejected matches, prior requests, absence, and relists stay
   distinguishable. Delete a profile to remove its local records and referenced screenshots;
@@ -129,6 +133,7 @@ No live broker requests run as part of `npm run check`.
 |------------------|------------------------|
 | Profiles, matches, requests, scan history | Local SQLite at `data/privacy-janitor.db`, or the folder set by `PJ_DATA_DIR`. Readable only by your user account on macOS and Linux; not encrypted by the app. |
 | Screenshots | Local `data/evidence/`, readable only by your user account on macOS and Linux; may contain sensitive details. |
+| Records export | Only when you choose **Download records**: a JSON file saved by your browser, holding the profile and its broker records. Not encrypted; screenshots and local paths are left out. |
 | Searches and form entry | Solari's remote browsers and the broker sites receive entered details. Preparation can transmit fields before final approval. |
 | Session recordings | Requested from Solari. Provider-side storage and retention are outside the local app's control. Treat replay links as sensitive. |
 | Optional Groq scoring | Known identifier and location values are replaced with tokens. Redaction reduces disclosure but is not a guarantee of anonymity. |
@@ -143,8 +148,10 @@ No live broker requests run as part of `npm run check`.
   it also runs in CI. It does **not** inspect image/video contents, all possible personal
   information, or past commits. Review every staged change before pushing.
 - A folder inside **OneDrive, Dropbox, or another synced location may be uploaded by that
-  service**, even when Git ignores it. Set `PJ_DATA_DIR` to a private, non-synced folder if
-  needed. The app does not automatically move or delete existing data when you change it.
+  service**, even when Git ignores it. `npm run doctor` and the setup panel warn when the data
+  folder is inside OneDrive, Dropbox, iCloud Drive or Google Drive. Set `PJ_DATA_DIR` to a
+  private, non-synced folder if needed. The app does not automatically move or delete
+  existing data when you change it.
 - Local deletion does not erase provider recordings, broker records, cloud-sync copies, or
   backups. It is not secure disk erasure. Review those services separately.
 - Use synthetic data in screenshots, demos, bug reports, and test fixtures. Do not attach
@@ -162,7 +169,7 @@ npm run smoke:adapters  # real adapters against synthetic selector fixtures
 npm run smoke:privacy   # repository guard and redaction regression checks
 npm run smoke:setup     # configuration, storage, and unsupported-plan checks
 npm run smoke:http      # built app on loopback with an isolated synthetic profile
-npm run smoke:ui        # dashboard in Chromium: match hints, undo, request states, framing
+npm run smoke:ui        # dashboard in Chromium: hints, undo, requests, evidence, WCAG, CSP
 npm run doctor          # local setup diagnostics; no provider calls
 npm run check:repo      # inspect indexed paths/content, without printing key values
 npm run check           # all checks plus production build
@@ -171,6 +178,9 @@ npm audit --omit=dev    # current dependency advisories
 
 `smoke:ui` needs Chromium: run `npx playwright-core install chromium` once, or set
 `PJ_UI_CHROMIUM` to an existing Chrome binary. Without one it skips locally; CI always runs it.
+It audits WCAG 2.1 AA at desktop and phone width and fails on any Content-Security-Policy
+violation. Set `PJ_UI_FAILURE_SCREENSHOT` to a file path to keep a screenshot of a failure;
+CI uploads one as an artifact.
 
 The other diagnostic scripts under `scripts/` may contact providers and brokers. Read them
 before running; they are not part of the offline test suite and may incur charges or save
@@ -189,7 +199,9 @@ sensitive debugging output.
 Adapters implement `BrokerAdapter` in `src/adapters/`; the engine owns browser sessions,
 evidence, and local persistence. Include synthetic fixtures for success, challenges, and
 ambiguous outcomes. Run `npm run check` before submitting changes. Do not present offline
-fixture coverage as live verification.
+fixture coverage as live verification. Bug reports and pull requests use templates that keep
+personal data out; report security problems privately as described in
+[SECURITY.md](SECURITY.md).
 
 ## Responsible use
 
