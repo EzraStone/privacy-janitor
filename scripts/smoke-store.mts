@@ -375,6 +375,22 @@ check("a flow's own failure survives a failed browser close",
 check("a close failure after a successful flow is still reported",
   await failureOf(async () => "done") === "browser close failed")
 
+// Two sessions of one flow in the same millisecond (two profiles scanning a
+// broker at once) must not share an evidence folder: screenshots would
+// overwrite each other and deleting one profile would delete both.
+const workingClient = {
+  async launch() { return { id: "sess_fixture", async newPage() { return {} }, async close() {} } },
+} as unknown as import("@solarisdk/browser").Solari
+const realNow = Date.now
+Date.now = () => 1_790_000_000_000
+try {
+  const [first, second] = await Promise.all([1, 2].map(() =>
+    withBrokerSession("scan-spokeo", async () => "done", { client: workingClient })))
+  check("same-millisecond sessions get separate evidence folders", first.evidence.evidenceDir !== second.evidence.evidenceDir)
+} finally {
+  Date.now = realNow
+}
+
 // A new profile is saved by upsert, so a colliding id would silently
 // overwrite someone else's record: ids carry 64 bits of crypto randomness.
 const generated = Array.from({ length: 10_000 }, () => store.newId("id"))

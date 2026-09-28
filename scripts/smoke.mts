@@ -59,9 +59,9 @@ console.log("smoke: proxy session ids")
 // IP mid-flow and read as a session hijack. Guard the longest id we ship.
 const longestBrokerId = [...adapters].sort((a, b) => b.id.length - a.id.length)[0].id
 const stamp = Date.now().toString(36)
-// Mirrors the flow names orchestrator.ts passes to withBrokerSession().
+// Mirrors the run ids withBrokerSession() builds from each flow name.
 for (const prefix of ["scan", "optout", "submit", "confirm"]) {
-  const runId = `${prefix}-${longestBrokerId}-${stamp}`
+  const runId = `${prefix}-${longestBrokerId}-${stamp}-0123abcd`
   check(`${runId} pins within 32 chars`, proxySessionId(runId).length <= 32)
 }
 check("short run ids pass through unchanged", proxySessionId("scan-spokeo-abc") === "scan-spokeo-abc")

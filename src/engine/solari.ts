@@ -153,7 +153,9 @@ export async function withBrokerSession<T>(
   options: { proxySessionId?: string; client?: Solari } = {},
 ): Promise<{ result: T; evidence: RunEvidence }> {
   const client = options.client ?? getSolariClient()
-  const runId = `${flowName}-${Date.now().toString(36)}`
+  // The nonce keeps two same-millisecond sessions of one flow (two profiles
+  // scanning a broker at once) out of each other's evidence folder.
+  const runId = `${flowName}-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`
   const evidence = createRunEvidence(runId, proxySessionId(options.proxySessionId ?? runId))
 
   const { browser, stealth } = await launchResilient(client, evidence.proxySessionId)
