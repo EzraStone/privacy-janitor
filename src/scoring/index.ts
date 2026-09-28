@@ -24,6 +24,8 @@ export interface ListingRisk {
 export interface ExposureReport {
   totalScore: number
   rankings: ListingRisk[]
+  /** Listings the model gave no usable ranking; the total leaves them out. */
+  unrankedListingIds: string[]
   summary: string
   generatedAt: string
   model: string
@@ -138,6 +140,7 @@ export function parseExposureReport(
   return {
     totalScore,
     rankings: rankings.sort((a, b) => b.score - a.score),
+    unrankedListingIds: listings.filter((_, index) => !seen.has(index)).map((listing) => listing.id),
     summary: restoreText(String(parsed.summary ?? "").slice(0, 1000), map),
     generatedAt: new Date().toISOString(),
     model,

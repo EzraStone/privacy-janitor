@@ -458,6 +458,10 @@ check("out-of-range, repeated and unscored rankings are dropped",
   noisy.rankings.length === 1 && noisy.rankings[0].listingId === "lst_a")
 check("the first ranking for a listing wins", noisy.rankings[0].score === 80)
 check("total score stays a number", noisy.totalScore === 80)
+// lst_b's only ranking was unusable: the report must say so, not drop it quietly.
+check("listings without a usable ranking are named", JSON.stringify(noisy.unrankedListingIds) === JSON.stringify(["lst_b"]))
+check("a report that ranks all listings leaves none out",
+  parseExposureReport(rank([{ listing_index: 0, score: 1 }, { listing_index: 1, score: 2 }]), pair, emptyMap, "m").unrankedListingIds.length === 0)
 check("numeric-string scores are accepted",
   parseExposureReport(rank([{ listing_index: 1, score: "42", rationale: "", recommended_action: "" }]), pair, emptyMap, "m").totalScore === 42)
 let emptyRejected = false
@@ -495,6 +499,8 @@ check("rankings of listings no longer yours are set aside",
   rejectedLater.rankings.map((r) => r.listingId).join() === "lst_a" && rejectedLater.stale === 1)
 check("a listing a rescan found gone is set aside", currentRankings(both, [pair[0], { ...pair[1], presenceStatus: "absent" }]).stale === 1)
 check("a deleted listing is set aside", currentRankings(both, [pair[0]]).stale === 1)
+check("unranked listings still yours are counted", currentRankings(noisy, pair).unranked === 1)
+check("an unranked listing no longer yours is not", currentRankings(noisy, [pair[0], { ...pair[1], confirmedMine: false }]).unranked === 0)
 check("an unchanged report is fully current", currentRankings(both, pair).stale === 0 && currentRankings(both, pair).rankings.length === 2)
 
 console.log("")

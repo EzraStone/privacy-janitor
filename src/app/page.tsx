@@ -492,6 +492,12 @@ export default function Home() {
                   )
                 })}
               </div>
+              {ranked.unranked > 0 && (
+                <p className="text-sm text-zinc-400">
+                  The model gave {ranked.unranked} listing(s) no usable ranking, so the overall score
+                  leaves them out. Rank again to include them.
+                </p>
+              )}
               {ranked.stale > 0 && (
                 <p className="text-sm text-zinc-400">
                   {ranked.stale} ranked listing(s) changed since this report — marked not you,
