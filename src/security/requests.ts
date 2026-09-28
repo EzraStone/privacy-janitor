@@ -1,3 +1,5 @@
+import { StatusError } from "../errors.ts"
+
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"])
 
 const CONFIRMATION_DOMAINS: Record<string, string> = {
@@ -6,13 +8,9 @@ const CONFIRMATION_DOMAINS: Record<string, string> = {
   fastpeoplesearch: "fastpeoplesearch.com",
 }
 
-export class RequestValidationError extends Error {
-  readonly status: number
-
+export class RequestValidationError extends StatusError {
   constructor(message: string, status = 400) {
-    super(message)
-    this.name = "RequestValidationError"
-    this.status = status
+    super(message, status)
   }
 }
 

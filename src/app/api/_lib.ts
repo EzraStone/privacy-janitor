@@ -2,6 +2,7 @@
  * Shared JSON responses and bounded request parsing for the local API.
  */
 import { NextResponse } from "next/server"
+import { StatusError } from "@/errors"
 import { RequestValidationError } from "@/security/requests"
 
 export const dynamic = "force-dynamic"
@@ -15,7 +16,7 @@ export function fail(message: string, status = 400) {
 }
 
 export function failFromError(error: unknown) {
-  if (error instanceof RequestValidationError) return fail(error.message, error.status)
+  if (error instanceof StatusError) return fail(error.message, error.status)
   return fail(error instanceof Error ? error.message : "request failed", 500)
 }
 

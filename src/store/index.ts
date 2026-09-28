@@ -10,6 +10,7 @@ import { DatabaseSync } from "node:sqlite"
 import { chmodSync, closeSync, mkdirSync, openSync } from "node:fs"
 import { dirname } from "node:path"
 import { getDatabasePath } from "../config/paths.ts"
+import { NotFoundError } from "../errors.ts"
 import { activeSubmissionStatuses, canTransition } from "../engine/submission-state.ts"
 import type {
   BrokerScanObservation,
@@ -420,7 +421,7 @@ export function deleteIdentity(identityId: string): string[] {
     db.prepare("DELETE FROM listings WHERE identity_id = ?").run(identityId)
     db.prepare("DELETE FROM scan_runs WHERE identity_id = ?").run(identityId)
     const res = db.prepare("DELETE FROM identities WHERE id = ?").run(identityId)
-    if (res.changes === 0) throw new Error(`identity ${identityId} not found`)
+    if (res.changes === 0) throw new NotFoundError("profile not found")
 
     db.exec("COMMIT")
     return evidenceDirs
@@ -1007,10 +1008,10 @@ export function activeSubmission(listingId: string): Submission | undefined {
 
 export function requireActionableListing(listingId: string): Listing {
   const listing = getListing(listingId)
-  if (!listing) throw new Error("listing not found")
+  if (!listing) throw new NotFoundError("listing not found")
   if (listing.confirmedMine !== true) throw new Error("confirm that this listing is yours first")
   if (listing.presenceStatus === "absent") throw new Error("this listing is currently absent; rescan before another broker action")
-  if (!getIdentity(listing.identityId)) throw new Error("profile not found")
+  if (!getIdentity(listing.identityId)) throw new NotFoundError("profile not found")
   return listing
 }
 
@@ -1068,7 +1069,7 @@ export function transitionSubmission(
 
 export function requireCurrentSubmission(listingId: string, submissionId: string): Submission {
   const sub = getSubmission(submissionId)
-  if (!sub || sub.listingId !== listingId) throw new Error("submission does not belong to this listing")
+  if (!sub || sub.listingId !== listingId) throw new NotFoundError("submission does not belong to this listing")
   const current = activeSubmission(listingId) ?? listSubmissions(listingId)[0]
   if (current?.id !== sub.id) throw new Error("this attempt was superseded; refresh the queue")
   return sub

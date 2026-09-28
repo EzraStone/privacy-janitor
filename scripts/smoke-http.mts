@@ -127,6 +127,22 @@ try {
   if (process.platform !== "win32") {
     assert.equal(statSync(join(directory, "privacy-janitor.db")).mode & 0o077, 0, "a fresh database is owner-only")
   }
+  // Expected failures carry their meaning: an unknown record is a 404, not a
+  // 500 that reads as a crash. A sent request is seeded straight into the
+  // test database; the server reads it on the next request.
+  process.env.PJ_DATA_DIR = directory
+  const store = await import("../src/store/index.ts")
+  const seededAt = new Date().toISOString()
+  store.saveIdentity({ id: "id_sent", fullName: "Riley Sample", city: "Austin", stateCode: "TX", createdAt: seededAt })
+  store.upsertListing({ id: "lst_sent", brokerId: "spokeo", identityId: "id_sent", url: "https://www.spokeo.com/Riley-Sample/p1",
+    displayName: "Riley Sample", exposedData: {}, confirmedMine: true, firstSeenAt: seededAt, lastSeenAt: seededAt })
+  const sent = store.createSubmission("lst_sent")
+  store.updateSubmission(sent.id, { status: "submitted" })
+  store.closeDb()
+  const actionStatus = async (body: Record<string, unknown>) => (await post("/api/actions", body)).status
+  assert.equal(await actionStatus({ action: "cancel-optout", listingId: "lst_sent", submissionId: "sub_missing" }), 404, "unknown attempt")
+  assert.equal(await actionStatus({ action: "reopen-removal", listingId: "lst_missing", submissionId: sent.id }), 404, "attempt of another listing")
+  assert.equal((await post("/api/state", { action: "delete-identity", identityId: "id_missing" })).status, 404, "unknown profile")
   // "Reset all" promises to delete all evidence, including files whose
   // database reference was lost; reference-based cleanup never finds those.
   mkdirSync(join(evidence, "orphaned-run"))
@@ -134,7 +150,7 @@ try {
   assert.equal((await post("/api/state", { action: "reset-all" })).status, 200)
   assert.deepEqual(readdirSync(evidence), [], "reset leaves no evidence behind")
   assert.equal(readFileSync(join(outside, "secret.txt"), "utf8"), "never served", "reset never follows a link outside the jail")
-  console.log("Local HTTP checks passed: setup endpoint, origin protections, request shapes, evidence jail, profile validation, referrer and framing policy, synthetic profile, preflight rejection, dashboard render, full reset")
+  console.log("Local HTTP checks passed: setup endpoint, origin protections, request shapes, status codes, evidence jail, profile validation, referrer and framing policy, synthetic profile, preflight rejection, dashboard render, full reset")
 } finally {
   if (child.exitCode === null && !spawnFailed) child.kill()
   await exited.catch(() => {})
