@@ -197,6 +197,13 @@ export default function Home() {
     (l) => l.confirmedMine === false && l.presenceStatus !== "absent",
   )
   const ranked = report ? currentRankings(report, scopedListings) : null
+  // Each confirmed listing with its active attempt, or else its latest one.
+  const queue = confirmedListings.map((listing) => ({
+    listing,
+    sub: scopedSubmissions.find((s) => s.listingId === listing.id && activeSubmissionStatuses.includes(s.status)) ??
+      scopedSubmissions.find((s) => s.listingId === listing.id),
+  }))
+  const stageCount = (stage: QueueStage) => queue.filter(({ listing, sub }) => queueStage(listing, sub) === stage).length
   const activeScan = scopedScans.find((s) => !s.finishedAt)
   const latestRescan = scopedScans.find((s) => s.kind === "rescan")
   // Rescan events cover every record on each broker. Name the listing each one
@@ -479,6 +486,11 @@ export default function Home() {
         <section className="panel space-y-4">
           <p className="eyebrow">05 / Remove</p>
           <h2 className="text-xl font-semibold tracking-tight">Opt-out queue</h2>
+          <p className="text-sm text-zinc-400">
+            {queue.length} listing{queue.length === 1 ? "" : "s"}:{" "}
+            {stageCount("needs_you")} {stageCount("needs_you") === 1 ? "needs" : "need"} you ·{" "}
+            {stageCount("with_brokers")} with brokers · {stageCount("gone")} no longer listed
+          </p>
           <div className="max-w-md text-sm">
             <label className="field-label">
               Contact email brokers will see
@@ -503,9 +515,7 @@ export default function Home() {
             )}
           </div>
           <div className="space-y-3">
-            {confirmedListings.map((l) => {
-              const sub = scopedSubmissions.find((s) => s.listingId === l.id && activeSubmissionStatuses.includes(s.status)) ??
-                scopedSubmissions.find((s) => s.listingId === l.id)
+            {queue.map(({ listing: l, sub }) => {
               return (
                 <OptOutRow
                   key={l.id}
@@ -772,6 +782,16 @@ function ListingCard({
       )}
     </div>
   )
+}
+
+type QueueStage = "needs_you" | "with_brokers" | "gone"
+
+/** Where a confirmed listing stands: waiting on the person, on the broker, or gone. */
+function queueStage(listing: Listing, sub?: Submission): QueueStage {
+  if (listing.presenceStatus === "absent") return "gone"
+  // A "removed" request whose listing is present again is a relist: yours to act on.
+  const yours: SubmissionStatus[] = ["prepared", "attention_required", "awaiting_email", "failed", "cancelled", "removed"]
+  return !sub || yours.includes(sub.status) ? "needs_you" : "with_brokers"
 }
 
 function formatDay(iso: string): string {

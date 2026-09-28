@@ -138,6 +138,9 @@ try {
   assert.match(await card(page, "hint-strong").innerText(), /✓\s*Shares a relative’s name/)
   assert.match(await card(page, "hint-sparse").innerText(), /–\s*No address listed/, "unknown shows as –, not ✗")
   console.log("ok: review cards explain which details match")
+  // The queue opens with where things stand: what waits on you, on brokers, and what is gone.
+  const queueSection = page.locator("section", { hasText: "Opt-out queue" })
+  assert.match(await queueSection.innerText(), /4 listings: 3 need you · 1 with brokers · 0 no longer listed/)
   assert.deepEqual(await wcagViolations(page), [], "dashboard meets WCAG 2.1 AA")
 
   // Every decision can go back to review before a request is sent.
