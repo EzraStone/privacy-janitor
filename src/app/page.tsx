@@ -206,12 +206,7 @@ export default function Home() {
     (l) => l.confirmedMine === false && l.presenceStatus !== "absent",
   )
   const ranked = report ? currentRankings(report, scopedListings) : null
-  // Each confirmed listing with its active attempt, or else its latest one.
-  const queue = confirmedListings.map((listing) => ({
-    listing,
-    sub: scopedSubmissions.find((s) => s.listingId === listing.id && activeSubmissionStatuses.includes(s.status)) ??
-      scopedSubmissions.find((s) => s.listingId === listing.id),
-  }))
+  const queue = confirmedListings.map((listing) => ({ listing, sub: currentAttempt(scopedSubmissions, listing.id) }))
   const stageCount = (stage: QueueStage) => queue.filter(({ listing, sub }) => queueStage(listing, sub) === stage).length
   const activeScan = scopedScans.find((s) => !s.finishedAt)
   // The server refuses deletion while scans or broker actions run; say so up
@@ -347,6 +342,12 @@ export default function Home() {
                   {" "}
                   · {i.city}, {i.stateCode}
                 </span>
+                {/* With several people, which one has something waiting shows without selecting each. */}
+                {toDoCount(state, i.id) > 0 && (
+                  <span className={i.id === activeIdentityId ? "text-black/60" : "text-zinc-400"}>
+                    {" "}· {toDoCount(state, i.id)} to do
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -898,6 +899,21 @@ function ListingCard({
       )}
     </div>
   )
+}
+
+/** A listing's active attempt, or else its latest one. */
+function currentAttempt(submissions: Submission[], listingId: string): Submission | undefined {
+  return submissions.find((s) => s.listingId === listingId && activeSubmissionStatuses.includes(s.status)) ??
+    submissions.find((s) => s.listingId === listingId)
+}
+
+/** What waits on the person for one profile: listings to review and queue items that need them. */
+function toDoCount(state: StateResponse, identityId: string): number {
+  const listings = state.listings.filter((l) => l.identityId === identityId && l.presenceStatus !== "absent")
+  const toReview = listings.filter((l) => l.confirmedMine === null).length
+  const inQueue = listings.filter((l) => l.confirmedMine === true &&
+    queueStage(l, currentAttempt(state.submissions, l.id)) === "needs_you").length
+  return toReview + inQueue
 }
 
 type QueueStage = "needs_you" | "with_brokers" | "gone"

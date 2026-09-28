@@ -25,6 +25,9 @@ const later = new Date(Date.now() + 60_000).toISOString()
 const person = "Jordan Example"
 store.saveIdentity({ id: "id_ui", fullName: person, city: "Chicago", stateCode: "IL", ageRange: "40-45",
   relatives: ["Casey Example"], createdAt: now })
+// A second, older profile with nothing to do; the newest profile opens first.
+store.saveIdentity({ id: "id_other", fullName: "Riley Sample", city: "Austin", stateCode: "TX",
+  createdAt: new Date(Date.now() - 86_400_000).toISOString() })
 function listing(id: string, displayName: string, confirmedMine: boolean | null, extra: Record<string, unknown> = {}) {
   store.upsertListing({ id, brokerId: "spokeo", identityId: "id_ui", url: `https://www.spokeo.com/${id}`,
     displayName, exposedData: {}, confirmedMine, firstSeenAt: now, lastSeenAt: now, ...extra })
@@ -172,6 +175,9 @@ try {
     })
     assert.equal(ring, "solid 2px rgb(255, 255, 255)")
   }
+  // Each profile says how much waits on the person: 4 to review, 3 in the queue.
+  assert.match(await page.getByRole("button", { name: /^Jordan Example/ }).innerText(), /7 to do/)
+  assert.doesNotMatch(await page.getByRole("button", { name: /^Riley Sample/ }).innerText(), /to do/)
   // The selected profile is conveyed by state, not only by colour.
   await page.getByRole("button", { name: /^Jordan Example/, pressed: true }).waitFor()
   // The scan panel says what the latest scan found, next to the button that runs one.
