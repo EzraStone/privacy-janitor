@@ -15,9 +15,10 @@ export interface Identity {
   fullName: string
   city: string
   stateCode: string // two-letter US state, e.g. "WA"
-  /** Optional, improves match confidence on brokers that surface relatives. */
-  ageRange?: string // e.g. "25-30"
-  /** Optional. Never sent anywhere; used only locally for match scoring. */
+  /** Optional "lo-hi" range, e.g. "40-45". Match hints compare a listing's age with it. */
+  ageRange?: string
+  /** Optional full names. Never sent anywhere as written: used locally for
+   *  match hints, and replaced by tokens before optional scoring. */
   relatives?: string[]
   createdAt: string
 }
@@ -44,7 +45,8 @@ export interface Listing {
   screenshotPath?: string
   /** null = not yet decided; true = user confirmed it's them; false = rejected. */
   confirmedMine: boolean | null
-  /** Raw HTML snippet kept for debugging broken flows. Local only. */
+  /** Raw HTML snippet for debugging broken flows. Local only; no adapter
+   *  currently fills it. */
   rawSnippet?: string
   firstSeenAt: string
   /** Last time a rescan saw this listing still live. */
@@ -154,8 +156,6 @@ export interface ScanRun {
   events: ScanListingEvent[]
 }
 
-/** Everything the engine needs to run one broker's flow. Adapters are pure
- *  logic + Solari pages; the engine owns sessions, evidence, and store. */
 /** Which details of a listing agree with the profile. A hint for the person
  *  reviewing it, never a decision: namesakes can share a name and a city. */
 export interface MatchExplanation {
@@ -169,6 +169,8 @@ export interface MatchExplanation {
   relatives?: "shared" | "none_shared"
 }
 
+/** Everything the engine needs to run one broker's flow. Adapters are pure
+ *  logic + Solari pages; the engine owns sessions, evidence, and store. */
 export interface BrokerAdapter {
   readonly id: string
   readonly name: string
