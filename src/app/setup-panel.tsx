@@ -33,7 +33,7 @@ export function SetupPanel({ status, error, checking, onCheck }: {
             </div>
             <div className="card">
               <p className="font-medium">Optional scoring</p>
-              <p className="mt-1 text-zinc-400">{status.groq === "configured" ? "Groq key configured" : "Off — add a Groq key to enable"}</p>
+              <p className="mt-1 text-zinc-400">{status.groq === "configured" ? "Groq key configured" : status.groq === "placeholder" ? "Off — replace the example Groq key to enable" : "Off — add a Groq key to enable"}</p>
               <p className="mt-1 text-xs text-muted">Not required for scans or removals</p>
             </div>
           </div>

@@ -84,7 +84,8 @@ try {
 
 const child = spawn(process.execPath, [require.resolve("next/dist/bin/next"), "start", "-H", "127.0.0.1", "-p", "0"], {
   stdio: ["ignore", "pipe", "pipe"],
-  env: { ...process.env, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1", PJ_DATA_DIR: directory, SOLARI_API_KEY: "", GROQ_API_KEY: "" },
+  // Groq keeps the .env.example placeholder: the state after copying it unedited.
+  env: { ...process.env, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1", PJ_DATA_DIR: directory, SOLARI_API_KEY: "", GROQ_API_KEY: "gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
 })
 const exited = once(child, "exit")
 let base = ""
@@ -278,6 +279,8 @@ try {
 
   // With no key configured, setup advice asks for one.
   assert.match(await page.locator('section[aria-label="Setup checks"]').innerText(), /add your SOLARI_API_KEY/)
+  // A key still set to the example value is not "missing": say to replace it.
+  assert.match(await page.locator('section[aria-label="Setup checks"]').innerText(), /replace the example Groq key to enable/)
   assert.deepEqual(pageErrors, [], "no uncaught page errors")
 
   // Another origin cannot frame the dashboard to disguise a click.
