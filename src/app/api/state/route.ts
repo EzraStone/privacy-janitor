@@ -67,14 +67,20 @@ export async function POST(req: NextRequest) {
           return fail("relatives must be a list of names")
         }
         const relatives = i.relatives?.map((r) => r.trim()).filter(Boolean)
+        // An id means an edit. The profile must still exist — a stale form in
+        // another tab must not recreate one that was deleted — and its stored
+        // creation time stands, whatever the form sends.
+        if (i.id !== undefined && typeof i.id !== "string") return fail("identity id must be a string")
+        const existing = i.id === undefined ? undefined : store.getIdentity(i.id)
+        if (i.id !== undefined && !existing) return fail("profile not found", 404)
         const identity: Identity = {
-          id: i.id ?? `id_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+          id: existing?.id ?? `id_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
           fullName,
           city,
           stateCode,
           ageRange: text(i.ageRange) || undefined,
           relatives: relatives?.length ? relatives : undefined,
-          createdAt: i.createdAt ?? new Date().toISOString(),
+          createdAt: existing?.createdAt ?? new Date().toISOString(),
         }
         store.saveIdentity(identity)
         return ok({ identity })

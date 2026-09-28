@@ -78,7 +78,16 @@ try {
   const tidied = (await tidy.json()).identity
   assert.deepEqual([tidied.fullName, tidied.city, tidied.stateCode], ["Jordan Example", "Chicago", "IL"])
   assert.deepEqual(tidied.relatives, ["Casey Example"], "blank relatives dropped, names trimmed")
+  // An edit keeps the stored creation time, whatever the form sends.
+  const edited = await post("/api/state", { action: "save-identity", identity: {
+    id: tidied.id, createdAt: "1999-01-01T00:00:00.000Z", fullName: "Jordan Example", city: "Evanston", stateCode: "IL",
+  } })
+  assert.equal(edited.status, 200)
+  assert.equal((await edited.json()).identity.createdAt, tidied.createdAt, "createdAt is not client-controlled")
+  assert.equal(await saveStatus({ id: 7 }), 400, "a profile id is a string")
   assert.equal((await post("/api/state", { action: "delete-identity", identityId: tidied.id })).status, 200)
+  // A stale edit form, say in another tab, must not recreate a deleted profile.
+  assert.equal(await saveStatus({ id: tidied.id }), 404, "saving a deleted profile does not resurrect it")
   const reopen = await fetch(`${base}/api/actions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "reopen-removal" }) })
   assert.equal(reopen.status, 400, "reopen-removal requires the exact attempt")
   for (const action of ["confirm-listing", "reject-listing", "review-listing"]) {

@@ -593,7 +593,6 @@ function IdentityForm({
         setSaving(true)
         await onSave({
           id: existing?.id,
-          createdAt: existing?.createdAt,
           fullName,
           city,
           stateCode,
