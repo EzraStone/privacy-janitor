@@ -113,6 +113,7 @@ const row = (page: Page, name: string): Locator =>
   page.locator("section", { hasText: "Opt-out queue" }).locator(".card", { hasText: name })
 const button = (scope: Locator, name: string) => scope.getByRole("button", { name, exact: true })
 
+let openPage: Page | undefined
 try {
   const deadline = Date.now() + 30_000
   let ready = false
@@ -126,6 +127,7 @@ try {
   assert.ok(ready, "Built test server must start; run npm run build first")
 
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+  openPage = page
   page.setDefaultTimeout(10_000)
   const pageErrors: string[] = []
   page.on("pageerror", (error) => pageErrors.push(error.message))
@@ -291,6 +293,12 @@ try {
   assert.ok(!(await framed?.locator("body").innerText().catch(() => ""))?.includes("PrivacyJanitor"), "dashboard refused to render in a frame")
   console.log("ok: setup advice, no page errors, and no framing by other sites")
   console.log("UI checks passed: match hints, undo, WCAG 2.1 AA, request states, rescan diff, broker names, setup advice, framing")
+} catch (error) {
+  // CI uploads this screenshot so a failure can be seen, not only read; the
+  // page only ever holds the synthetic profile above.
+  const screenshot = process.env.PJ_UI_FAILURE_SCREENSHOT
+  if (screenshot && openPage) await openPage.screenshot({ path: screenshot, fullPage: true }).catch(() => {})
+  throw error
 } finally {
   await browser.close()
   if (child.exitCode === null) child.kill()

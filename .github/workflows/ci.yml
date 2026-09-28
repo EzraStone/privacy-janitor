@@ -31,6 +31,18 @@ jobs:
 
       - name: Verify application
         run: npm run check
+        env:
+          PJ_UI_FAILURE_SCREENSHOT: ${{ runner.temp }}/smoke-ui-failure.png
+
+      # The dashboard suite only ever renders a synthetic profile.
+      - name: Upload the dashboard screenshot from a failed UI check
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-ui-failure
+          path: ${{ runner.temp }}/smoke-ui-failure.png
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=moderate
