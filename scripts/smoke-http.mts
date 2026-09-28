@@ -170,6 +170,10 @@ try {
   const html = await dashboard.text()
   assert.match(html, /Setup checks/)
   assert.match(html, /Recheck setup/)
+  // The tab is recognisable among other localhost pages.
+  const iconHref = html.match(/<link rel="icon" href="([^"]+)"/)?.[1]
+  assert.ok(iconHref, "the dashboard links a favicon")
+  assert.equal((await fetch(new URL(iconHref.replaceAll("&amp;", "&"), base))).headers.get("content-type"), "image/svg+xml")
   // The database holds broker records about a real person: owner-only.
   if (process.platform !== "win32") {
     assert.equal(statSync(join(directory, "privacy-janitor.db")).mode & 0o077, 0, "a fresh database is owner-only")
