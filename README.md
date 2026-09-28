@@ -211,7 +211,8 @@ sensitive debugging output. [`scripts/README.md`](scripts/README.md) says which 
 ## Contributing
 
 Adapters implement `BrokerAdapter` in `src/adapters/`; the engine owns browser sessions,
-evidence, and local persistence. Include synthetic fixtures for success, challenges, and
+evidence, and local persistence. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) maps the
+modules, the scan and removal flows, and the invariants they keep. Include synthetic fixtures for success, challenges, and
 ambiguous outcomes. Run `npm run check` before submitting changes. Do not present offline
 fixture coverage as live verification. Bug reports and pull requests use templates that keep
 personal data out; report security problems privately as described in
