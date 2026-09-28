@@ -37,6 +37,9 @@ const nextConfig: NextConfig = {
         { key: "Referrer-Policy", value: "no-referrer" },
         { key: "Content-Security-Policy", value: contentSecurityPolicy },
         { key: "X-Frame-Options", value: "DENY" },
+        // The dashboard needs no powerful browser feature; deny them outright.
+        { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), display-capture=()" },
+        { key: "X-Content-Type-Options", value: "nosniff" },
       ],
     }]
   },

@@ -156,6 +156,10 @@ try {
   assert.equal(policy.get("base-uri"), "'self'")
   assert.doesNotMatch(policy.get("script-src") ?? "", /unsafe-eval|https?:/, "no eval or remote scripts in production")
   assert.equal(dashboard.headers.get("x-frame-options"), "DENY")
+  // No powerful browser feature is ever needed, and no response is sniffed.
+  assert.equal(dashboard.headers.get("permissions-policy"), "camera=(), microphone=(), geolocation=(), payment=(), usb=(), display-capture=()")
+  assert.equal(dashboard.headers.get("x-content-type-options"), "nosniff")
+  assert.equal((await fetch(`${base}/api/state`)).headers.get("x-content-type-options"), "nosniff", "API responses too")
   const html = await dashboard.text()
   assert.match(html, /Setup checks/)
   assert.match(html, /Recheck setup/)
