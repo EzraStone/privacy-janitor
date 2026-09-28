@@ -1,0 +1,62 @@
+name: Bug report
+description: Something in PrivacyJanitor did not work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Issues are public.** Never include a real name, address, phone number, email,
+        listing URL, screenshot of a real listing, confirmation link, Solari replay link,
+        or API key. Describe the problem with the fictional profile "Jordan Example"
+        instead. Report security problems privately; see SECURITY.md.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Setup or doctor
+        - Profiles
+        - Scan or rescan
+        - Match review
+        - Exposure scoring
+        - Opt-out preparation or submission
+        - Email confirmation
+        - Records export
+        - Dashboard display or accessibility
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: broker
+    attributes:
+      label: Broker, if any
+      options:
+        - Not broker-specific
+        - Whitepages
+        - Spokeo
+        - FastPeopleSearch
+  - type: textarea
+    id: doctor
+    attributes:
+      label: npm run doctor output
+      description: It prints no key values. Remove any folder path that includes your name.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+      placeholder: e.g. the output of git rev-parse --short HEAD
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Personal data
+      options:
+        - label: This report contains no real person's details, listing links or screenshots, confirmation or replay links, or keys.
+          required: true

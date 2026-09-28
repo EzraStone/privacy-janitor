@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security problem privately
+    url: https://github.com/EzraStone/privacy-janitor/security/advisories/new
+    about: Vulnerabilities go through private reporting, never a public issue.
