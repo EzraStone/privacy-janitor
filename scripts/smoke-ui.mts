@@ -128,6 +128,8 @@ try {
   page.setDefaultTimeout(10_000)
   const pageErrors: string[] = []
   page.on("pageerror", (error) => pageErrors.push(error.message))
+  // The dashboard must run within its own Content-Security-Policy.
+  page.on("console", (message) => { if (/Content Security Policy/i.test(message.text())) pageErrors.push(message.text()) })
   await page.goto(base)
   await page.getByText(`Is this ${person}?`).waitFor()
 

@@ -143,7 +143,18 @@ try {
   // Opening a broker listing must not reveal that the visit came from here.
   assert.equal(dashboard.headers.get("referrer-policy"), "no-referrer")
   // No other site may frame the dashboard: a click inside it approves broker requests.
-  assert.equal(dashboard.headers.get("content-security-policy"), "frame-ancestors 'none'")
+  // The page may talk only to this app: even injected script cannot send
+  // profile data to another host, load a remote script, or post a form away.
+  const policy = new Map((dashboard.headers.get("content-security-policy") ?? "").split(";")
+    .map((directive) => directive.trim().split(/\s+/)).map(([name, ...sources]) => [name, sources.join(" ")]))
+  assert.equal(policy.get("frame-ancestors"), "'none'")
+  assert.equal(policy.get("default-src"), "'self'")
+  assert.equal(policy.get("connect-src"), "'self'")
+  assert.equal(policy.get("img-src"), "'self' data: blob:")
+  assert.equal(policy.get("object-src"), "'none'")
+  assert.equal(policy.get("form-action"), "'self'")
+  assert.equal(policy.get("base-uri"), "'self'")
+  assert.doesNotMatch(policy.get("script-src") ?? "", /unsafe-eval|https?:/, "no eval or remote scripts in production")
   assert.equal(dashboard.headers.get("x-frame-options"), "DENY")
   const html = await dashboard.text()
   assert.match(html, /Setup checks/)
