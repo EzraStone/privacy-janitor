@@ -14,6 +14,7 @@ import { adapters } from "../src/adapters/registry.ts"
 import { matchHintsFor } from "../src/engine/match-hints.ts"
 import { createProxySessionId, proxySessionId } from "../src/engine/solari.ts"
 import {
+  addressesFrom,
   classifyBrokerScan,
   isNoResultText,
   ageFrom,
@@ -217,6 +218,22 @@ check("names are kept and trimmed",
 check("a layout block is dropped", namesFrom(["Jordan Example\nAge 42\n742 Evergreen Terrace"]).length === 0)
 check("an overlong line is dropped", namesFrom(["Relatives " + "and associates ".repeat(5)]).length === 0)
 check("text without letters is dropped", namesFrom(["123", "—"]).length === 0)
+
+console.log("smoke: scraped addresses are tidied")
+// An address can span lines, match two selectors, or sit inside a wrapper
+// that an address selector also matches. Cards and the rescan diff print it.
+const tidyAddresses = (texts: string[]) => JSON.stringify(addressesFrom(texts))
+check("a two-line address reads as one line",
+  tidyAddresses(["742 Evergreen Terrace\n  Chicago, IL 60601"]) === JSON.stringify(["742 Evergreen Terrace, Chicago, IL 60601"]))
+check("a line ending in a comma gains no second comma",
+  tidyAddresses(["742 Evergreen Terrace,\nChicago, IL"]) === JSON.stringify(["742 Evergreen Terrace, Chicago, IL"]))
+check("the same address twice is kept once",
+  tidyAddresses(["742 Evergreen Terrace, Chicago, IL", "742 evergreen terrace, chicago, il"]) === JSON.stringify(["742 Evergreen Terrace, Chicago, IL"]))
+check("a wrapper around several addresses is dropped for the addresses themselves", tidyAddresses([
+  "Address history\n742 Evergreen Terrace\nChicago, IL\n31 Spooner St\nChicago, IL",
+  "742 Evergreen Terrace\nChicago, IL", "31 Spooner St\nChicago, IL",
+]) === JSON.stringify(["742 Evergreen Terrace, Chicago, IL", "31 Spooner St, Chicago, IL"]))
+check("a city-only location is kept", tidyAddresses(["Chicago, IL"]) === JSON.stringify(["Chicago, IL"]))
 
 console.log("smoke: scraped phones are sanity-checked")
 // A phone selector can match the container that holds several numbers; split

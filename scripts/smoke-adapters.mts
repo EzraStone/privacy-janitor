@@ -106,7 +106,7 @@ for (const adapter of adapters) {
   }
   const address = "742 Evergreen Terrace, Chicago, IL 60601"
   const direct = await scanProfile({
-    [fields.address]: [{ text: address }],
+    [fields.address]: [{ text: "742 Evergreen Terrace\nChicago, IL 60601" }, { text: address }],
     [fields.phone[0]]: [{ text: "(312) 555-0142" }, { text: "312-555-0142" }],
     [fields.age[0]]: [{ text: "Age 42" }],
     [fields.relative[0]]: [{ text: "Casey Example" }, { text: "Relatives, associates and neighbors of Jordan Example in Chicago, Illinois" }],

@@ -27,6 +27,7 @@ import {
   inspectBrokerSearchPage,
   tryAllTexts,
   tryInnerText,
+  addressesFrom,
   agesFrom,
   explainListing,
   isPersonProfileSlug,
@@ -136,7 +137,7 @@ export const fastpeoplesearch: BrokerAdapter = {
             '[class*="address" i]',
             'a[href*="/address/"]',
             'div[class*="adr"]',
-          ]),
+          ], addressesFrom),
           phones: await tryAllTexts(page, [
             'a[href*="/phone/"]',
             'a[href^="tel:"]',

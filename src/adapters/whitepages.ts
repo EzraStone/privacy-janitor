@@ -31,6 +31,7 @@ import {
   inspectBrokerSearchPage,
   tryAllTexts,
   tryInnerText,
+  addressesFrom,
   agesFrom,
   explainListing,
   isPersonProfileSlug,
@@ -122,7 +123,7 @@ export const whitepages: BrokerAdapter = {
             '[data-testid="address"]',
             ".address",
             'div[class*="address"]',
-          ]),
+          ], addressesFrom),
           phones: await tryAllTexts(page, [
             '[data-testid="phone"]',
             ".phone",

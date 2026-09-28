@@ -309,6 +309,28 @@ export function namesFrom(texts: string[]): string[] {
 }
 
 /**
+ * Addresses, one tidy line each. Brokers print an address over two lines,
+ * the same address can match two selectors, and an address selector can also
+ * match the wrapper that holds the whole address history: a text containing
+ * two or more of the other addresses is that wrapper, not an address.
+ */
+export function addressesFrom(texts: string[]): string[] {
+  const lines = texts.map((text) => text.split(/[\r\n]+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .reduce((joined, line) => joined ? `${joined}${joined.endsWith(",") ? "" : ","} ${line}` : line, ""))
+  const seen = new Set<string>()
+  const unique = lines.filter((line) => {
+    const key = line.toLowerCase()
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  const contains = (outer: string, inner: string) => outer !== inner && outer.toLowerCase().includes(inner.toLowerCase())
+  return unique.filter((line) => unique.filter((other) => contains(line, other)).length < 2)
+}
+
+/**
  * Phone numbers, one per line of text. A phone selector can match the
  * container holding several numbers, so split it instead of keeping one blob;
  * the same number printed twice ("312.555.0100", "+1 312-555-0100") collapses.

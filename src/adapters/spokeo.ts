@@ -26,6 +26,7 @@ import {
   inspectBrokerSearchPage,
   tryAllTexts,
   tryInnerText,
+  addressesFrom,
   agesFrom,
   emailsFrom,
   explainListing,
@@ -122,7 +123,7 @@ export const spokeo: BrokerAdapter = {
             '[data-testid="address"]',
             'a[href*="address"]',
             ".address",
-          ]),
+          ], addressesFrom),
           phones: await tryAllTexts(page, [
             '[data-testid="phone"]',
             'a[href^="tel:"]',
