@@ -29,7 +29,7 @@ import {
   scoreMatch,
 } from "../src/adapters/helpers.ts"
 import { buildRedactionMap, redactText, redactListing } from "../src/scoring/redact.ts"
-import { parseExposureReport, scoringModel } from "../src/scoring/index.ts"
+import { parseExposureReport, scoringModel, scoringTokenBudget } from "../src/scoring/index.ts"
 import { currentRankings } from "../src/scoring/report.ts"
 import type { BrokerPage, Identity, Listing } from "../src/types.ts"
 
@@ -492,6 +492,11 @@ console.log("smoke: scoring model setting")
 check("an unset model uses the default", scoringModel(undefined) === "openai/gpt-oss-120b")
 check("a blank model uses the default", scoringModel("   ") === "openai/gpt-oss-120b")
 check("a model name is trimmed", scoringModel(" llama-3.3-70b-versatile ") === "llama-3.3-70b-versatile")
+
+// Each ranking costs tokens: a fixed cap cut long reports off mid-JSON.
+check("a few listings keep the base budget", scoringTokenBudget(3) === 1500)
+check("the budget grows with the listings", scoringTokenBudget(20) === 3600)
+check("the budget is bounded", scoringTokenBudget(200) === 8192)
 
 console.log("smoke: a report outlives later decisions")
 // A listing marked not you, or found gone by a rescan, keeps its old ranking

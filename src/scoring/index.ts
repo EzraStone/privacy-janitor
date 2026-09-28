@@ -44,6 +44,13 @@ export function scoringModel(configured: string | undefined): string {
   return configured?.trim() || "openai/gpt-oss-120b"
 }
 
+/** Reply budget for ranking this many listings. Every ranking costs roughly
+ *  a hundred tokens and reasoning models spend some of the budget before
+ *  answering, so a fixed cap cut long reports off mid-JSON. */
+export function scoringTokenBudget(listingCount: number): number {
+  return Math.min(8192, Math.max(1500, 600 + 150 * listingCount))
+}
+
 export async function scoreExposure(
   identity: Identity,
   listings: Listing[],
@@ -94,7 +101,7 @@ Constraints:
       { role: "user", content: user },
     ],
     temperature: 0.2,
-    max_tokens: 1500,
+    max_tokens: scoringTokenBudget(listings.length),
     // Ask for JSON. The parser still tolerates fences if a model ignores this.
     response_format: { type: "json_object" },
   })
