@@ -138,6 +138,9 @@ try {
   assert.match(await card(page, "hint-strong").innerText(), /✓\s*Shares a relative’s name/)
   assert.match(await card(page, "hint-sparse").innerText(), /–\s*No address listed/, "unknown shows as –, not ✗")
   console.log("ok: review cards explain which details match")
+  // The scan panel says what the latest scan found, next to the button that runs one.
+  const scanPanel = page.locator("section", { hasText: "Run broker scan" })
+  assert.match(await scanPanel.innerText(), new RegExp(`Last rescan finished [A-Z][a-z]{2} \\d{1,2}, \\d{4} — Spokeo: 1 listing`))
   // The queue opens with where things stand: what waits on you, on brokers, and what is gone.
   const queueSection = page.locator("section", { hasText: "Opt-out queue" })
   assert.match(await queueSection.innerText(), /4 listings: 3 need you · 1 with brokers · 0 no longer listed/)

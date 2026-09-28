@@ -205,6 +205,7 @@ export default function Home() {
   }))
   const stageCount = (stage: QueueStage) => queue.filter(({ listing, sub }) => queueStage(listing, sub) === stage).length
   const activeScan = scopedScans.find((s) => !s.finishedAt)
+  const lastScan = scopedScans.find((s) => s.finishedAt)
   const latestRescan = scopedScans.find((s) => s.kind === "rescan")
   // Rescan events cover every record on each broker. Name the listing each one
   // is about (brokers often hold several per person), and leave out records
@@ -373,6 +374,17 @@ export default function Home() {
           </div>
           {setup && !setup.canStartScan && !activeScan && (
             <p className="text-sm text-zinc-400">Scanning starts once setup is complete — see the checks above.</p>
+          )}
+          {/* What the last scan found, here and not only in the history below:
+              a scan that finds nothing otherwise leaves no visible trace. */}
+          {lastScan?.finishedAt && !activeScan && (
+            <p className="text-sm text-zinc-400">
+              Last {lastScan.kind} finished {formatDay(lastScan.finishedAt)} —{" "}
+              {lastScan.results.map((r) => `${brokerName(r.brokerId)}: ${
+                r.outcome === "found" ? `${r.listingsFound} listing${r.listingsFound === 1 ? "" : "s"}`
+                  : r.outcome === "clear" ? "none found" : "inconclusive"
+              }`).join(" · ")}
+            </p>
           )}
           {activeScan && (
             <p className="text-xs text-muted">
