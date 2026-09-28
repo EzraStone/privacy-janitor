@@ -5,6 +5,7 @@ import type {
   Identity, Listing, MatchExplanation, ScanListingEventType, ScanRun, Submission, SubmissionStatus,
 } from "@/types"
 import type { ExposureReport } from "@/scoring"
+import { currentRankings } from "@/scoring/report"
 import { activeSubmissionStatuses } from "@/engine/submission-state"
 import type { SetupStatus } from "@/config/setup"
 import { SetupPanel } from "./setup-panel"
@@ -200,6 +201,7 @@ export default function Home() {
   const rejectedListings = scopedListings.filter(
     (l) => l.confirmedMine === false && l.presenceStatus !== "absent",
   )
+  const ranked = report ? currentRankings(report, scopedListings) : null
   const activeScan = scopedScans.find((s) => !s.finishedAt)
   const latestRescan = scopedScans.find((s) => s.kind === "rescan")
   // Rescan events cover every record on each broker. Name the listing each one
@@ -429,7 +431,7 @@ export default function Home() {
               {busy === "score" ? "Scoring (redacted, via Groq)…" : "Rank my exposure"}
             </button>
           </div>
-          {report ? (
+          {report && ranked ? (
             <div className="space-y-3">
               <p className="text-sm text-zinc-300">
                 Overall exposure:{" "}
@@ -438,7 +440,7 @@ export default function Home() {
               </p>
               <p className="text-sm text-zinc-400">{report.summary}</p>
               <div className="space-y-2">
-                {report.rankings.map((r) => {
+                {ranked.rankings.map((r) => {
                   const listing = presentConfirmedListings.find((l) => l.id === r.listingId)
                   return (
                     <div key={r.listingId} className="card space-y-1 text-sm">
@@ -452,6 +454,12 @@ export default function Home() {
                   )
                 })}
               </div>
+              {ranked.stale > 0 && (
+                <p className="text-sm text-zinc-400">
+                  {ranked.stale} ranked listing(s) changed since this report — marked not you,
+                  found gone, or deleted — and are left out. Rank again for a current overall score.
+                </p>
+              )}
               <p className="text-xs text-muted">
                 Optional Groq scoring receives tokenized listing and profile-location fields;
                 redaction reduces disclosure but does not guarantee anonymity. Skip scoring

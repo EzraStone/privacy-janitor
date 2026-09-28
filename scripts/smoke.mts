@@ -28,6 +28,7 @@ import {
 } from "../src/adapters/helpers.ts"
 import { buildRedactionMap, redactText, redactListing } from "../src/scoring/redact.ts"
 import { parseExposureReport } from "../src/scoring/index.ts"
+import { currentRankings } from "../src/scoring/report.ts"
 import type { BrokerPage, Identity, Listing } from "../src/types.ts"
 
 let failures = 0
@@ -458,6 +459,20 @@ check("recommended action shows real values",
   restored.rankings[0].recommendedAction === `Remove ${typedIdentity.fullName} from this broker first.`)
 check("summary shows real values; invented tokens stay as written",
   restored.summary === `${typedIdentity.fullName} is findable at ${homeAddress}. See [ADDR_99].`)
+
+console.log("smoke: a report outlives later decisions")
+// A listing marked not you, or found gone by a rescan, keeps its old ranking
+// until the next report; the dashboard must not show it as current.
+const both = parseExposureReport(rank([
+  { listing_index: 0, score: 80, rationale: "a", recommended_action: "x" },
+  { listing_index: 1, score: 40, rationale: "b", recommended_action: "y" },
+]), pair, emptyMap, "m")
+const rejectedLater = currentRankings(both, [pair[0], { ...pair[1], confirmedMine: false }])
+check("rankings of listings no longer yours are set aside",
+  rejectedLater.rankings.map((r) => r.listingId).join() === "lst_a" && rejectedLater.stale === 1)
+check("a listing a rescan found gone is set aside", currentRankings(both, [pair[0], { ...pair[1], presenceStatus: "absent" }]).stale === 1)
+check("a deleted listing is set aside", currentRankings(both, [pair[0]]).stale === 1)
+check("an unchanged report is fully current", currentRankings(both, pair).stale === 0 && currentRankings(both, pair).rankings.length === 2)
 
 console.log("")
 if (failures > 0) {
