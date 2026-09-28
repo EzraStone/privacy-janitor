@@ -162,7 +162,7 @@ try {
   store.upsertListing({ id: "lst_sent", brokerId: "spokeo", identityId: "id_sent", url: "https://www.spokeo.com/Riley-Sample/p1",
     displayName: "Riley Sample", exposedData: {}, confirmedMine: true, firstSeenAt: seededAt, lastSeenAt: seededAt })
   const sent = store.createSubmission("lst_sent")
-  store.updateSubmission(sent.id, { status: "submitted" })
+  store.updateSubmission(sent.id, { status: "submitted", submitSessionId: "sess_sent", previewScreenshotPath: join(evidence, "run-1", "shot.png") })
   store.closeDb()
   const actionStatus = async (body: Record<string, unknown>) => (await post("/api/actions", body)).status
   assert.equal(await actionStatus({ action: "cancel-optout", listingId: "lst_sent", submissionId: "sub_missing" }), 404, "unknown attempt")
@@ -171,6 +171,23 @@ try {
   // A request in the wrong state for the action is a conflict, not a crash.
   assert.equal(await actionStatus({ action: "cancel-optout", listingId: "lst_sent", submissionId: sent.id }), 409, "a sent request cannot be cancelled")
   assert.equal(await actionStatus({ action: "reopen-removal", listingId: "lst_sent", submissionId: sent.id }), 409, "reopen waits for a rescan")
+  // A profile's records download as one JSON file: what was found, decided
+  // and requested, with brokers by name and no local file paths.
+  const exported = await fetch(`${base}/api/export?identityId=id_sent`)
+  assert.equal(exported.status, 200)
+  assert.match(exported.headers.get("content-disposition") ?? "",
+    /^attachment; filename="privacy-janitor-riley-sample-\d{4}-\d{2}-\d{2}\.json"$/)
+  assert.equal(exported.headers.get("cache-control"), "no-store")
+  const recordsText = await exported.text()
+  const records = JSON.parse(recordsText)
+  assert.equal(records.format, "privacy-janitor-records/1")
+  assert.equal(records.profile.fullName, "Riley Sample")
+  assert.deepEqual(records.listings.map((l: { broker: string; decision: string }) => [l.broker, l.decision]), [["Spokeo", "yours"]])
+  assert.deepEqual(records.requests.map((r: { status: string; submitSessionId: string }) => [r.status, r.submitSessionId]), [["submitted", "sess_sent"]])
+  assert.ok(!recordsText.includes(directory), "no local file paths in the export")
+  assert.equal((await fetch(`${base}/api/export?identityId=id_missing`)).status, 404)
+  assert.equal((await fetch(`${base}/api/export`)).status, 400)
+  assert.equal((await fetch(`${base}/api/export?identityId=id_sent`, { headers: { origin: "https://unrelated.invalid" } })).status, 403)
   // "Reset all" promises to delete all evidence, including files whose
   // database reference was lost; reference-based cleanup never finds those.
   mkdirSync(join(evidence, "orphaned-run"))
@@ -178,7 +195,7 @@ try {
   assert.equal((await post("/api/state", { action: "reset-all" })).status, 200)
   assert.deepEqual(readdirSync(evidence), [], "reset leaves no evidence behind")
   assert.equal(readFileSync(join(outside, "secret.txt"), "utf8"), "never served", "reset never follows a link outside the jail")
-  console.log("Local HTTP checks passed: setup endpoint, origin protections, request shapes, status codes, evidence jail, profile validation, referrer and framing policy, synthetic profile, preflight rejection, dashboard render, full reset")
+  console.log("Local HTTP checks passed: setup endpoint, origin protections, request shapes, status codes, evidence jail, profile validation, referrer and framing policy, record export, synthetic profile, preflight rejection, dashboard render, full reset")
 } finally {
   if (child.exitCode === null && !spawnFailed) child.kill()
   await exited.catch(() => {})
