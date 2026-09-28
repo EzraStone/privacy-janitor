@@ -310,6 +310,17 @@ try {
   assert.match(await page.locator('section[aria-label="Setup checks"]').innerText(), /replace the example Groq key to enable/)
   assert.deepEqual(pageErrors, [], "no uncaught page errors")
 
+  // While a scan runs, deletion waits for it, and the page says so up front
+  // rather than after a confirmation dialog.
+  store.createScanRun("id_ui", "scan")
+  store.closeDb()
+  await page.reload()
+  await page.getByText("Scan running").waitFor()
+  assert.ok(await page.getByRole("button", { name: "Delete profile" }).isDisabled())
+  assert.ok(await page.getByRole("button", { name: "Reset all" }).isDisabled())
+  await page.getByText("Deleting and resetting wait until scans and broker actions finish.").waitFor()
+  console.log("ok: deletion waits for running work, and says so")
+
   // Another origin cannot frame the dashboard to disguise a click.
   const attacker = await browser.newPage()
   await attacker.setContent(`<iframe src="${base}/" width="800" height="600"></iframe>`)

@@ -214,6 +214,12 @@ export default function Home() {
   }))
   const stageCount = (stage: QueueStage) => queue.filter(({ listing, sub }) => queueStage(listing, sub) === stage).length
   const activeScan = scopedScans.find((s) => !s.finishedAt)
+  // The server refuses deletion while scans or broker actions run; say so up
+  // front rather than after a confirmation dialog.
+  const running = (submissions: Submission[]) =>
+    submissions.some((s) => ["approved", "submitting", "confirming"].includes(s.status))
+  const profileBusy = Boolean(activeScan) || running(scopedSubmissions)
+  const anythingBusy = Boolean(state?.scans.some((s) => !s.finishedAt)) || running(state?.submissions ?? [])
   const lastScan = scopedScans.find((s) => s.finishedAt)
   const latestRescan = scopedScans.find((s) => s.kind === "rescan")
   // Rescan events cover every record on each broker. Name the listing each one
@@ -299,19 +305,25 @@ export default function Home() {
             {identity && (
               <button
                 className="btn-danger"
-                disabled={!!busy}
+                disabled={!!busy || profileBusy}
                 onClick={() => void deleteIdentity(identity.id, identity.fullName)}
               >
                 Delete profile
               </button>
             )}
             {state && (state.identities.length > 0 || state.listings.length > 0) && (
-              <button className="btn-danger" disabled={!!busy} onClick={() => void resetAll()}>
+              <button className="btn-danger" disabled={!!busy || anythingBusy} onClick={() => void resetAll()}>
                 Reset all
               </button>
             )}
           </div>
         </div>
+
+        {profileBusy ? (
+          <p className="text-xs text-zinc-400">Deleting and resetting wait until scans and broker actions finish.</p>
+        ) : anythingBusy ? (
+          <p className="text-xs text-zinc-400">Reset all waits until another profile&apos;s scan or broker action finishes.</p>
+        ) : null}
 
         {/* profile selector */}
         {state && state.identities.length > 0 && (
