@@ -85,29 +85,29 @@ export async function POST(req: NextRequest) {
         const city = text(i?.city)
         const stateCode = text(i?.stateCode).toUpperCase()
         if (!i || !fullName || !city || !stateCode) {
-          return fail("fullName, city, and stateCode are required")
+          return fail("Enter a full name, city and state.")
         }
-        if (!/^[A-Z]{2}$/.test(stateCode)) return fail("stateCode must be a two-letter state code")
+        if (!/^[A-Z]{2}$/.test(stateCode)) return fail("Use the two-letter state code, such as IL.")
         // Each field is typed into broker search forms, one paid session per
         // broker: a name without letters or an essay-length city is a mistake.
-        if (!/\p{L}/u.test(fullName) || !/\p{L}/u.test(city)) return fail("fullName and city must contain letters")
-        if (fullName.length > 100 || city.length > 100) return fail("fullName and city must be at most 100 characters")
+        if (!/\p{L}/u.test(fullName) || !/\p{L}/u.test(city)) return fail("The name and city must contain letters.")
+        if (fullName.length > 100 || city.length > 100) return fail("Keep the name and city to 100 characters each.")
         if (i.relatives !== undefined &&
           (!Array.isArray(i.relatives) || !i.relatives.every((r) => typeof r === "string"))) {
-          return fail("relatives must be a list of names")
+          return fail("Relatives must be a list of names.")
         }
         const relatives = i.relatives?.map((r) => r.trim()).filter(Boolean)
         if (relatives && (relatives.length > 20 || relatives.some((r) => r.length > 100))) {
-          return fail("list at most 20 relatives, each at most 100 characters")
+          return fail("List at most 20 relatives, each up to 100 characters.")
         }
         const ageRange = normalizeAgeRange(text(i.ageRange))
-        if (ageRange === null) return fail("ageRange must be a range such as 40-45, from 18 to 119")
+        if (ageRange === null) return fail("Enter the age range as two ages from 18 to 119, lowest first, such as 40-45.")
         // An id means an edit. The profile must still exist — a stale form in
         // another tab must not recreate one that was deleted — and its stored
         // creation time stands, whatever the form sends.
         if (i.id !== undefined && typeof i.id !== "string") return fail("identity id must be a string")
         const existing = i.id === undefined ? undefined : store.getIdentity(i.id)
-        if (i.id !== undefined && !existing) return fail("profile not found", 404)
+        if (i.id !== undefined && !existing) return fail("This profile no longer exists. Reload the page to see current profiles.", 404)
         const identity: Identity = {
           id: existing?.id ?? store.newId("id"),
           fullName,

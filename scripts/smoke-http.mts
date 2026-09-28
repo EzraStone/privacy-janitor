@@ -83,6 +83,9 @@ try {
   for (const ageRange of ["abc", "25 to 30", "30-25", "42", "10-20", "40-150"]) {
     assert.equal(await saveStatus({ ageRange }), 400, `age range "${ageRange}" rejected`)
   }
+  // The dashboard shows these messages beside the form: plain words, not field names.
+  const reversed = await post("/api/state", { action: "save-identity", identity: { fullName: "Jordan Example", city: "Chicago", stateCode: "IL", ageRange: "45-40" } })
+  assert.equal((await reversed.json()).error, "Enter the age range as two ages from 18 to 119, lowest first, such as 40-45.")
   const tidy = await post("/api/state", { action: "save-identity", identity: {
     fullName: "  Jordan Example ", city: " Chicago", stateCode: "il ", relatives: ["  ", " Casey Example "], ageRange: " 40 – 45 ",
   } })
