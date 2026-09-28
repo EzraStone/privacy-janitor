@@ -3,6 +3,7 @@ import {
   assertTrustedLocalRequest,
   validateBrokerConfirmationUrl,
 } from "../src/security/requests.ts"
+import { adapters } from "../src/adapters/registry.ts"
 
 let failures = 0
 function check(name: string, condition: boolean) {
@@ -71,6 +72,20 @@ rejected(
   "credential-bearing URL blocked",
   () => validateBrokerConfirmationUrl("https://user:pass@spokeo.com/confirm", "spokeo"),
 )
+
+// The allowlist repeats each broker's domain by hand. Every registered
+// adapter must be covered, or its confirmation links would all be refused,
+// and one broker's listing must never accept another broker's link.
+for (const adapter of adapters) {
+  const confirm = `${adapter.homepage}/confirm?id=test`
+  let accepted = false
+  try { accepted = validateBrokerConfirmationUrl(confirm, adapter.id) === confirm } catch {}
+  check(`${adapter.name} confirmation links accepted`, accepted)
+  for (const other of adapters.filter((candidate) => candidate.id !== adapter.id)) {
+    rejected(`${other.name} link refused for a ${adapter.name} listing`,
+      () => validateBrokerConfirmationUrl(`${other.homepage}/confirm?id=test`, adapter.id))
+  }
+}
 
 if (failures) {
   console.error(`\n${failures} security smoke check(s) failed`)
