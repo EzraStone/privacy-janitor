@@ -973,6 +973,8 @@ function OptOutRow({
           <div className="flex gap-2 flex-wrap">
             <input
               className="input-std flex-1 min-w-64"
+              aria-label="Confirmation link from the broker’s email"
+              type="url"
               placeholder="https://…confirmation-link…"
               value={confirmUrl}
               onChange={(e) => onConfirmUrlChange(e.target.value)}

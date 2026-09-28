@@ -188,6 +188,7 @@ try {
   assert.match(await waitingRow.innerText(), new RegExp(`Started ${day(backdated)} · last change ${day(now)}`))
   assert.match(await row(page, "Queue prepared").innerText(), new RegExp(`Started ${day(now)}\n`), "one date when nothing changed since")
   assert.doesNotMatch(await row(page, "Queue not started").innerText(), /Started/, "no date before any request")
+  await waitingRow.getByLabel("Confirmation link from the broker’s email").waitFor()
   await button(waitingRow, "Close attempt locally").click()
   await waitingRow.getByText("Cancelled").waitFor()
   const stillRow = row(page, "Queue still listed")
