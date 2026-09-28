@@ -44,6 +44,28 @@ const rescanEventLabel: Record<ScanListingEventType, string> = {
   no_longer_seen: "no longer found; no removal was requested",
 }
 
+/**
+ * A JSON request to the local API. A failure names what went wrong: the app's
+ * own message, an error page from a crashed route, or a server that stopped.
+ */
+async function requestJson(endpoint: string, body?: Record<string, unknown>): Promise<Record<string, unknown>> {
+  let res: Response
+  try {
+    res = await fetch(endpoint, body
+      ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
+      : { cache: "no-store" })
+  } catch {
+    throw new Error("Could not reach the local app. Is it still running in your terminal?")
+  }
+  const json = await res.json().catch(() => null) as Record<string, unknown> | null
+  if (!res.ok || !json) {
+    throw new Error(typeof json?.error === "string"
+      ? json.error
+      : `The local app answered with an error (${res.status}). Check the terminal running it.`)
+  }
+  return json
+}
+
 export default function Home() {
   const [state, setState] = useState<StateResponse | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -62,10 +84,7 @@ export default function Home() {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/state", { cache: "no-store" })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? "Could not load local data.")
-      setState(json)
+      setState(await requestJson("/api/state") as unknown as StateResponse)
       setLoadError(null)
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Could not reach the local app.")
@@ -117,18 +136,13 @@ export default function Home() {
     }
   }, [state, refresh])
 
-  async function action(body: Record<string, unknown>, label: string) {
+  // Every dashboard change: one request, any failure shown, then a refresh.
+  async function send(endpoint: "/api/actions" | "/api/state", body: Record<string, unknown>, label: string) {
     setBusy(label)
     setError(null)
     try {
-      const res = await fetch("/api/actions", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? "action failed")
-      if (body.action === "score") setReport(json.report)
+      const json = await requestJson(endpoint, body)
+      if (body.action === "score") setReport(json.report as ExposureReport)
       await refresh()
       return json
     } catch (e) {
@@ -138,27 +152,8 @@ export default function Home() {
       setBusy(null)
     }
   }
-
-  async function stateAction(body: Record<string, unknown>, label: string) {
-    setBusy(label)
-    setError(null)
-    try {
-      const res = await fetch("/api/state", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? "action failed")
-      await refresh()
-      return json
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "action failed")
-      return null
-    } finally {
-      setBusy(null)
-    }
-  }
+  const action = (body: Record<string, unknown>, label: string) => send("/api/actions", body, label)
+  const stateAction = (body: Record<string, unknown>, label: string) => send("/api/state", body, label)
 
   async function deleteIdentity(id: string, name: string) {
     if (
@@ -228,7 +223,7 @@ export default function Home() {
       </header>
 
       {error && (
-        <div className="rounded-xl border border-white/20 bg-white/[0.04] px-4 py-3 text-sm text-zinc-200">
+        <div role="alert" className="rounded-xl border border-white/20 bg-white/[0.04] px-4 py-3 text-sm text-zinc-200">
           <span className="mr-2 font-semibold text-white">Something went wrong.</span>{error}
         </div>
       )}
@@ -330,8 +325,9 @@ export default function Home() {
                 { action: "save-identity", identity: i },
                 "identity",
               )
-              if (res?.identity) {
-                setActiveIdentityId(res.identity.id as string)
+              const saved = res?.identity as Identity | undefined
+              if (saved) {
+                setActiveIdentityId(saved.id)
                 setReport(null)
                 setShowIdentityForm(false)
                 setEditingIdentity(null)

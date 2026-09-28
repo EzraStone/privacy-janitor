@@ -178,6 +178,19 @@ try {
   assert.match(await row(page, "Queue prepared").innerText(), /^Queue prepared\nSpokeo\n/)
   console.log("ok: the rescan diff names each listing and skips not-you records")
 
+  // A crash page or a stopped server reads as that, not as a JSON parse error.
+  const failWith = async (handler: (route: import("playwright-core").Route) => Promise<void>) => {
+    await page.route("**/api/state", (route) => route.request().method() === "POST" ? handler(route) : route.continue())
+    await button(card(page, "hint-strong"), "This is me").click()
+  }
+  await failWith((route) => route.fulfill({ status: 500, contentType: "text/html", body: "<!doctype html><title>Error</title>" }))
+  await page.getByRole("alert").filter({ hasText: "The local app answered with an error (500)" }).waitFor()
+  await page.unroute("**/api/state")
+  await failWith((route) => route.abort())
+  await page.getByRole("alert").filter({ hasText: "Could not reach the local app" }).waitFor()
+  await page.unroute("**/api/state")
+  console.log("ok: server errors and a stopped server are named plainly")
+
   // With no key configured, setup advice asks for one.
   assert.match(await page.locator('section[aria-label="Setup checks"]').innerText(), /add your SOLARI_API_KEY/)
   assert.deepEqual(pageErrors, [], "no uncaught page errors")
