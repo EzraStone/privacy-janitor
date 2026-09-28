@@ -159,6 +159,8 @@ try {
   await page.getByRole("button", { name: /^Jordan Example/, pressed: true }).waitFor()
   // The scan panel says what the latest scan found, next to the button that runs one.
   const scanPanel = page.locator("section", { hasText: "Run broker scan" })
+  // It is a status region, so a scan finishing is announced, not only drawn.
+  await scanPanel.getByRole("status").filter({ hasText: "Last rescan finished" }).waitFor()
   assert.match(await scanPanel.innerText(), new RegExp(`Last rescan finished [A-Z][a-z]{2} \\d{1,2}, \\d{4} — Spokeo: 1 listing`))
   // The queue opens with where things stand: what waits on you, on brokers, and what is gone.
   const queueSection = page.locator("section", { hasText: "Opt-out queue" })

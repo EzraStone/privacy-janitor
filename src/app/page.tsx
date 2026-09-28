@@ -377,21 +377,26 @@ export default function Home() {
             <p className="text-sm text-zinc-400">Scanning starts once setup is complete — see the checks above.</p>
           )}
           {/* What the last scan found, here and not only in the history below:
-              a scan that finds nothing otherwise leaves no visible trace. */}
-          {lastScan?.finishedAt && !activeScan && (
-            <p className="text-sm text-zinc-400">
-              Last {lastScan.kind} finished {formatDay(lastScan.finishedAt)} —{" "}
-              {lastScan.results.map((r) => `${brokerName(r.brokerId)}: ${
-                r.outcome === "found" ? `${r.listingsFound} listing${r.listingsFound === 1 ? "" : "s"}`
-                  : r.outcome === "clear" ? "none found" : "inconclusive"
-              }`).join(" · ")}
-            </p>
-          )}
-          {activeScan && (
-            <p className="text-xs text-muted">
-              Scan running — results stream in below as each broker finishes (polling every 4s).
-            </p>
-          )}
+              a scan that finds nothing otherwise leaves no visible trace. One
+              status region, always present, so a scan starting and finishing
+              is announced to screen readers, not only drawn. */}
+          <div role="status">
+            {activeScan ? (
+              <p className="text-xs text-muted">
+                Scan running — results stream in below as each broker finishes (polling every 4s).
+              </p>
+            ) : lastScan?.finishedAt ? (
+              <p className="text-sm text-zinc-400">
+                Last {lastScan.kind} finished {formatDay(lastScan.finishedAt)} —{" "}
+                {lastScan.results.map((r) => `${brokerName(r.brokerId)}: ${
+                  r.outcome === "found" ? `${r.listingsFound} listing${r.listingsFound === 1 ? "" : "s"}`
+                    : r.outcome === "clear" ? "none found" : "inconclusive"
+                }`).join(" · ")}
+              </p>
+            ) : (
+              <p className="text-sm text-zinc-400">No scan yet for this profile.</p>
+            )}
+          </div>
         </section>
       )}
 
