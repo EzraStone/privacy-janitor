@@ -6,7 +6,7 @@
  * the jail compares physical locations — a symlinked directory inside the
  * evidence tree cannot be used to reach a file outside it.
  */
-import { lstatSync, readdirSync, realpathSync, rmSync } from "node:fs"
+import { lstatSync, readdirSync, realpathSync, rmdirSync, rmSync } from "node:fs"
 import { basename, dirname, join, resolve } from "node:path"
 import { getEvidenceDir, isInsideEvidenceDir } from "../config/paths.ts"
 
@@ -47,6 +47,16 @@ export function removeEvidencePath(path: string): boolean {
   }
   try {
     rmSync(resolved, { recursive: true, force: true })
+    // A run folder emptied by this removal goes too: its name alone records
+    // which broker was used, and when. The jail excludes the evidence root.
+    const parent = dirname(resolved)
+    if (isJailed(parent)) {
+      try {
+        if (readdirSync(parent).length === 0) rmdirSync(parent)
+      } catch {
+        /* already gone, or refilled meanwhile */
+      }
+    }
     return true
   } catch (err) {
     console.warn(`[cleanup] failed to delete ${resolved}:`, err instanceof Error ? err.message : err)

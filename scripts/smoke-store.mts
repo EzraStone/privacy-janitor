@@ -7,7 +7,7 @@
 import "dotenv/config"
 import { existsSync, mkdtempSync, rmSync, mkdirSync, statSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
 
 const tempRoot = mkdtempSync(join(tmpdir(), "pj-smoke-"))
@@ -375,6 +375,19 @@ writeFileSync(join(tempRoot, "evidence", "run-1", "shot.png"), "x")
 check("jailed path removed", cleanup.removeEvidencePath(join(tempRoot, "evidence", "run-1")) === true)
 check("outside path refused", cleanup.removeEvidencePath(join(tmpdir(), "some-other-file.txt")) === false)
 check("evidence root itself refused", cleanup.removeEvidencePath(join(tempRoot, "evidence")) === false)
+// Deleting a run's last screenshot removes its folder too: the folder name
+// alone records which broker was used, and when.
+const soleShot = join(tempRoot, "evidence", "submit-spokeo-run", "optout-result.png")
+mkdirSync(dirname(soleShot), { recursive: true })
+writeFileSync(soleShot, "x")
+const sharedShot = join(tempRoot, "evidence", "scan-spokeo-run", "scan-result-state.png")
+mkdirSync(dirname(sharedShot), { recursive: true })
+writeFileSync(sharedShot, "x")
+writeFileSync(join(dirname(sharedShot), "profile.png"), "x")
+cleanup.removeEvidencePaths([soleShot, sharedShot])
+check("a run folder emptied by cleanup is removed", !existsSync(dirname(soleShot)))
+check("a run folder still holding evidence stays", existsSync(join(dirname(sharedShot), "profile.png")))
+check("the evidence root survives cleanup", existsSync(join(tempRoot, "evidence")))
 
 // A failed flow must be reported by its own error. If the browser then also
 // fails to close, that error must not replace the cause in the scan result.
