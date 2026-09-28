@@ -167,7 +167,7 @@ export default function Home() {
   async function deleteIdentity(id: string, name: string) {
     if (
       !window.confirm(
-        `Delete profile "${name}"?\n\nThis permanently removes their listings, submissions, and all local evidence screenshots. Broker-side opt-outs already submitted stay submitted.`,
+        `Delete profile "${name}"?\n\nThis permanently removes their listings, submissions, and all local evidence screenshots. Broker-side opt-outs already submitted stay submitted.\n\nTo keep a copy of the requests and findings, cancel and use Download records first.`,
       )
     )
       return
@@ -181,7 +181,7 @@ export default function Home() {
   async function resetAll() {
     if (
       !window.confirm(
-        "Reset EVERYTHING?\n\nAll profiles, listings, submissions, and evidence are permanently deleted. This cannot be undone.",
+        "Reset EVERYTHING?\n\nAll profiles, listings, submissions, and evidence are permanently deleted. This cannot be undone.\n\nTo keep a copy of a profile's requests and findings, cancel and use Download records first.",
       )
     )
       return

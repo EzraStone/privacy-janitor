@@ -310,6 +310,15 @@ try {
   assert.match(await page.locator('section[aria-label="Setup checks"]').innerText(), /replace the example Groq key to enable/)
   assert.deepEqual(pageErrors, [], "no uncaught page errors")
 
+  // Deletion is permanent, so its confirmation points to keeping a copy first.
+  const dialogs: string[] = []
+  page.on("dialog", (dialog) => { dialogs.push(dialog.message()); void dialog.dismiss() })
+  await page.getByRole("button", { name: "Delete profile" }).click()
+  await page.getByRole("button", { name: "Reset all" }).click()
+  assert.equal(dialogs.length, 2)
+  for (const message of dialogs) assert.match(message, /Download records first/)
+  assert.equal(await page.getByRole("button", { name: /^Jordan Example/ }).count(), 1, "dismissing deletes nothing")
+
   // While a scan runs, deletion waits for it, and the page says so up front
   // rather than after a confirmation dialog.
   store.createScanRun("id_ui", "scan")
