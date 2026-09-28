@@ -46,7 +46,7 @@ listing("hint-sparse", person, null)
 mkdirSync(join(directory, "evidence", "run"), { recursive: true })
 const preview = join(directory, "evidence", "run", "preview.png")
 writeFileSync(preview, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64"))
-listing("q-prepared", "Queue prepared", true)
+listing("q-prepared", "Queue prepared", true, { screenshotPath: searchRun })
 store.commitPreparedOptOut({ listingId: "q-prepared", brokerId: "spokeo", createdAt: now,
   state: { contactEmail: "jordan@example.com", previewPath: preview, summary: "synthetic", snapshot: "x", proxySessionId: "pin" } })
 listing("q-waiting", "Queue waiting", true)
@@ -220,6 +220,9 @@ try {
 
   // Request states: captions, recorded sessions, and the ways out.
   assert.match(await row(page, "Queue prepared").innerText(), /approve before we submit/)
+  // The queue keeps the link to where a listing was found.
+  await row(page, "Queue prepared").getByRole("link", { name: "Search results screenshot" }).waitFor()
+  assert.equal(await row(page, "Queue not started").getByRole("link", { name: "Search results screenshot" }).count(), 0)
   // The inline preview is clipped; approval must be able to see the whole form.
   const fullPreview = row(page, "Queue prepared").getByRole("link", { name: "Open the full preview" })
   assert.equal(await fullPreview.getAttribute("target"), "_blank")

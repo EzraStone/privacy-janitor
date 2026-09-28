@@ -595,6 +595,7 @@ export default function Home() {
                   key={l.id}
                   listing={l}
                   broker={brokerName(l.brokerId)}
+                  searchShot={state?.searchScreenshots?.[l.id]}
                   sub={sub}
                   busy={busy}
                   remoteReady={setup?.canStartScan === true}
@@ -948,11 +949,12 @@ function EvidenceShot({ path, alt, linkText }: { path: string; alt: string; link
 }
 
 function OptOutRow({
-  listing, broker, sub, busy, remoteReady, contactEmail, confirmUrl, onConfirmUrlChange,
+  listing, broker, searchShot, sub, busy, remoteReady, contactEmail, confirmUrl, onConfirmUrlChange,
   onPrepare, onApprove, onCancel, onConfirmEmail, onReviewAgain, onReopen,
 }: {
   listing: Listing
   broker: string
+  searchShot?: string
   sub?: Submission
   busy: string | null
   remoteReady: boolean
@@ -976,6 +978,12 @@ function OptOutRow({
         <div>
           <h3 className="font-medium">{listing.displayName}</h3>
           <div className="text-zinc-400">{broker}</div>
+          {/* Where the listing was found, still at hand when requesting its removal. */}
+          {searchShot && (
+            <a href={evidenceUrl(searchShot)} target="_blank" rel="noopener noreferrer" className="link-std text-xs">
+              Search results screenshot
+            </a>
+          )}
         </div>
         <div className={sub?.status === "failed" ? "text-muted" : sub?.status === "removed" ? "text-white" : "text-zinc-400"}>
           {isRelisted
