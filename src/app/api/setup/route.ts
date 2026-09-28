@@ -9,9 +9,7 @@ export const dynamic = "force-dynamic"
 export async function GET(req: NextRequest) {
   try {
     assertTrustedLocalRequest(req)
-    const response = ok(getSetupStatus())
-    response.headers.set("Cache-Control", "no-store")
-    return response
+    return ok(getSetupStatus())
   } catch (error) {
     return failFromError(error)
   }

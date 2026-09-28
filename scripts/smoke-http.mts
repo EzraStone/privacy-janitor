@@ -55,7 +55,11 @@ try {
       assert.equal(response.status, 400, `${route} rejects a ${body} body`)
     }
   }
-  const empty = await (await fetch(`${base}/api/state`)).json()
+  // Profiles and broker records must never land in the browser's disk cache.
+  const stateResponse = await fetch(`${base}/api/state`)
+  assert.equal(stateResponse.headers.get("cache-control"), "no-store", "state is never cached")
+  assert.equal((await post("/api/state", { action: "unknown" })).headers.get("cache-control"), "no-store", "errors are never cached")
+  const empty = await stateResponse.json()
   assert.deepEqual(empty.identities, [])
   assert.deepEqual(empty.matchHints, {}, "review hints are served, empty with no listings")
   const saved = await post("/api/state", { action: "save-identity", identity: { fullName: "Jordan Example", city: "Chicago", stateCode: "IL" } })

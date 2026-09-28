@@ -7,12 +7,15 @@ import { RequestValidationError } from "@/security/requests"
 
 export const dynamic = "force-dynamic"
 
+// Responses carry profiles and broker records: never keep them in a cache.
+const NO_STORE = { "cache-control": "no-store" }
+
 export function ok<T>(data: T, init?: number) {
-  return NextResponse.json(data, { status: init ?? 200 })
+  return NextResponse.json(data, { status: init ?? 200, headers: NO_STORE })
 }
 
 export function fail(message: string, status = 400) {
-  return NextResponse.json({ error: message }, { status })
+  return NextResponse.json({ error: message }, { status, headers: NO_STORE })
 }
 
 export function failFromError(error: unknown) {
