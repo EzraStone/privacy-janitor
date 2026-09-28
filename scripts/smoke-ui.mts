@@ -137,6 +137,12 @@ try {
   assert.match(await headline("hint-sparse"), /Too few details/)
   assert.match(await card(page, "hint-strong").innerText(), /✓\s*Shares a relative’s name/)
   assert.match(await card(page, "hint-sparse").innerText(), /–\s*No address listed/, "unknown shows as –, not ✗")
+  // Emoji mark each detail visually; assistive technology hears words instead.
+  const strongCard = await card(page, "hint-strong").ariaSnapshot()
+  assert.match(strongCard, /Address: 742 Evergreen Terrace/)
+  assert.match(strongCard, /Age: 42/)
+  assert.match(strongCard, /Relatives: Casey Example/)
+  assert.doesNotMatch(strongCard, /📍|📞|👤|👥/)
   console.log("ok: review cards explain which details match")
   // The selected profile is conveyed by state, not only by colour.
   await page.getByRole("button", { name: /^Jordan Example/, pressed: true }).waitFor()

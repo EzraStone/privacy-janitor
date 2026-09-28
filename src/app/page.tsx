@@ -761,6 +761,16 @@ function MatchHint({ match }: { match: MatchExplanation }) {
   )
 }
 
+function Detail({ mark, label, children }: { mark: string; label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <span aria-hidden="true">{mark} </span>
+      <span className="sr-only">{label}: </span>
+      {children}
+    </div>
+  )
+}
+
 function ListingCard({
   listing, broker, match, onConfirm, onReject, onReviewAgain,
 }: {
@@ -776,10 +786,15 @@ function ListingCard({
     <div className="card space-y-2 text-sm">
       <div className="font-semibold tracking-tight">{listing.displayName}</div>
       <div className="eyebrow">{broker}</div>
-      {e.addresses?.length ? <div>📍 {e.addresses.slice(0, 2).join(" · ")}</div> : null}
-      {e.phones?.length ? <div>📞 {e.phones.slice(0, 2).join(" · ")}</div> : null}
-      {e.age ? <div>👤 age {e.age}</div> : null}
-      {e.relatives?.length ? <div>👥 {e.relatives.slice(0, 3).join(" · ")}</div> : null}
+      {/* Emoji mark each detail for the eye; assistive technology hears the word. */}
+      {e.addresses?.length ? (
+        <Detail mark="📍" label={e.addresses.length > 1 ? "Addresses" : "Address"}>{e.addresses.slice(0, 2).join(" · ")}</Detail>
+      ) : null}
+      {e.phones?.length ? (
+        <Detail mark="📞" label={e.phones.length > 1 ? "Phones" : "Phone"}>{e.phones.slice(0, 2).join(" · ")}</Detail>
+      ) : null}
+      {e.age ? <Detail mark="👤 age" label="Age">{e.age}</Detail> : null}
+      {e.relatives?.length ? <Detail mark="👥" label="Relatives">{e.relatives.slice(0, 3).join(" · ")}</Detail> : null}
       <a href={listing.url} target="_blank" rel="noopener noreferrer" className="link-std block truncate">
         {listing.url}
       </a>
