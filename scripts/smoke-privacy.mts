@@ -50,4 +50,9 @@ const listing: Listing = {
 assert.ok(!redactListing(listing, buildRedactionMap(identity, [listing])).includes("private-name"), "unexpected age text must not bypass tokenization")
 listing.exposedData.age = "30-35"
 assert.ok(redactListing(listing, buildRedactionMap(identity, [listing])).includes("30-35"))
+// A decade is as coarse as a range and helps ranking; an exact age stays withheld.
+listing.exposedData.age = "40s"
+assert.ok(redactListing(listing, buildRedactionMap(identity, [listing])).includes("age_band: 40s"), "a decade is sent as a band")
+listing.exposedData.age = "42"
+assert.ok(redactListing(listing, buildRedactionMap(identity, [listing])).includes("age_band: single_value"), "an exact age is never sent")
 console.log("Privacy guard checks passed: blocked artifacts, credential detection, every text file scanned, diagnostic output location, safe placeholders, age-field minimization")

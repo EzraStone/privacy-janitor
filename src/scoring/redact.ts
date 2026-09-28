@@ -107,6 +107,8 @@ export function redactListing(listing: Listing, map: RedactionMap): string {
     parts.push(`relatives_listed: ${e.relatives.map((x) => redactText(x, map)).join(" | ")}`)
   if (e.aliases?.length)
     parts.push(`aliases: ${e.aliases.map((x) => redactText(x, map)).join(" | ")}`)
-  if (e.age) parts.push(`age_band: ${/^\d{1,3}\s*-\s*\d{1,3}$/.test(e.age) ? e.age : "single_value"}`)
+  // A range or a decade ("40s") is coarse and helps ranking; an exact age,
+  // or anything unexpected in the field, is withheld.
+  if (e.age) parts.push(`age_band: ${/^\d{1,3}\s*-\s*\d{1,3}$|^\d{1,2}0s$/.test(e.age) ? e.age : "single_value"}`)
   return parts.join("\n")
 }
