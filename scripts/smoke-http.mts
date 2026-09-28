@@ -71,6 +71,10 @@ try {
   assert.equal(await saveStatus({ stateCode: "Illinois" }), 400, "state must be a two-letter code")
   assert.equal(await saveStatus({ relatives: "Casey Example" }), 400, "relatives must be a list")
   assert.equal(await saveStatus({ relatives: ["Casey", 7] }), 400, "relatives must be names")
+  // Every field is typed into broker search forms, one paid session per broker.
+  assert.equal(await saveStatus({ fullName: "12345" }), 400, "a name needs letters")
+  assert.equal(await saveStatus({ city: "x".repeat(101) }), 400, "overlong city rejected")
+  assert.equal(await saveStatus({ relatives: Array.from({ length: 21 }, (_, n) => `Relative ${n}`) }), 400, "at most 20 relatives")
   // An age range the match hints cannot read would silently count as unknown.
   for (const ageRange of ["abc", "25 to 30", "30-25", "42", "10-20", "40-150"]) {
     assert.equal(await saveStatus({ ageRange }), 400, `age range "${ageRange}" rejected`)

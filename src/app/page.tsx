@@ -606,11 +606,11 @@ function IdentityForm({
     >
       <label className="field-label">
         Full name
-        <input className="input-std" placeholder="First Last" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+        <input className="input-std" placeholder="First Last" maxLength={100} value={fullName} onChange={(e) => setFullName(e.target.value)} required />
       </label>
       <label className="field-label">
         City
-        <input className="input-std" placeholder="Chicago" value={city} onChange={(e) => setCity(e.target.value)} required />
+        <input className="input-std" placeholder="Chicago" maxLength={100} value={city} onChange={(e) => setCity(e.target.value)} required />
       </label>
       <label className="field-label">
         State

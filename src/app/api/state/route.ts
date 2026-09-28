@@ -63,11 +63,18 @@ export async function POST(req: NextRequest) {
           return fail("fullName, city, and stateCode are required")
         }
         if (!/^[A-Z]{2}$/.test(stateCode)) return fail("stateCode must be a two-letter state code")
+        // Each field is typed into broker search forms, one paid session per
+        // broker: a name without letters or an essay-length city is a mistake.
+        if (!/\p{L}/u.test(fullName) || !/\p{L}/u.test(city)) return fail("fullName and city must contain letters")
+        if (fullName.length > 100 || city.length > 100) return fail("fullName and city must be at most 100 characters")
         if (i.relatives !== undefined &&
           (!Array.isArray(i.relatives) || !i.relatives.every((r) => typeof r === "string"))) {
           return fail("relatives must be a list of names")
         }
         const relatives = i.relatives?.map((r) => r.trim()).filter(Boolean)
+        if (relatives && (relatives.length > 20 || relatives.some((r) => r.length > 100))) {
+          return fail("list at most 20 relatives, each at most 100 characters")
+        }
         const ageRange = normalizeAgeRange(text(i.ageRange))
         if (ageRange === null) return fail("ageRange must be a range such as 40-45, from 18 to 119")
         // An id means an edit. The profile must still exist — a stale form in
