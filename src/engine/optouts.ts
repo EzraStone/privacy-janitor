@@ -2,7 +2,8 @@ import type { Identity, Listing, PreparedOptOut, Submission } from "../types.ts"
 import * as store from "../store/index.ts"
 import { getAdapter } from "../adapters/registry.ts"
 import { createProxySessionId, withBrokerSession } from "./solari.ts"
-import { validateBrokerConfirmationUrl } from "../security/requests.ts"
+import { RequestValidationError, validateBrokerConfirmationUrl } from "../security/requests.ts"
+import { ConflictError } from "../errors.ts"
 
 type Dependencies = {
   withSession?: typeof withBrokerSession
@@ -21,9 +22,9 @@ function preparedContext(sub: Submission) {
   const listing = store.requireActionableListing(sub.listingId)
   const identity = store.getIdentity(listing.identityId)!
   const prepared = store.getPreparedOptOut(sub.listingId)
-  if (!prepared || prepared.submissionId !== sub.id) throw new Error("prepare a new preview for this attempt")
+  if (!prepared || prepared.submissionId !== sub.id) throw new ConflictError("prepare a new preview for this attempt")
   if (prepared.state.snapshot !== snapshot(listing, identity)) {
-    throw new Error("profile or listing changed since the preview; cancel this attempt and prepare it again")
+    throw new ConflictError("profile or listing changed since the preview; cancel this attempt and prepare it again")
   }
   return { listing, identity, prepared }
 }
@@ -49,7 +50,7 @@ export function createOptOutService(dependencies: Dependencies = {}) {
     // type="email" whitespace stripping that the dashboard relies on.
     const contactEmail = rawContactEmail.trim()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail) || contactEmail.length > 254) {
-      throw new Error("enter a valid contact email")
+      throw new RequestValidationError("enter a valid contact email")
     }
     const task = (async () => {
       const listing = store.requireActionableListing(listingId)
@@ -63,7 +64,7 @@ export function createOptOutService(dependencies: Dependencies = {}) {
       )
       const current = store.requireActionableListing(listingId)
       if (snapshot(current, store.getIdentity(current.identityId)!) !== approvedSnapshot) {
-        throw new Error("profile changed while preparing; prepare a fresh preview")
+        throw new ConflictError("profile changed while preparing; prepare a fresh preview")
       }
       const previewPath = evidence.screenshot("optout-preview", result.screenshot)
       return store.commitPreparedOptOut({
@@ -132,13 +133,13 @@ export function createOptOutService(dependencies: Dependencies = {}) {
       preparedContext(sub)
       if (sub.status === "attention_required" &&
         (sub.attentionOperation !== "submit" || !retryAcknowledged)) {
-        throw new Error("acknowledge that retrying may send a duplicate request")
+        throw new ConflictError("acknowledge that retrying may send a duplicate request")
       }
       store.transitionSubmission(sub.id, sub.status, "approved", { lastError: null, attentionOperation: null })
     } else if (sub.status !== "approved") {
       // Duplicate approval requests after the claim/success are harmless.
       if (["submitting", "submitted", "awaiting_email", "confirming", "confirmed", "removed"].includes(sub.status)) return sub
-      throw new Error("prepare a new preview before approving this attempt")
+      throw new ConflictError("prepare a new preview before approving this attempt")
     }
     schedule("submit", sub.id, () => submit(sub.id))
     return store.getSubmission(sub.id)!
@@ -149,11 +150,11 @@ export function createOptOutService(dependencies: Dependencies = {}) {
     if (["confirming", "confirmed", "removed"].includes(sub.status)) return sub
     const listing = store.requireActionableListing(listingId)
     const adapter = adapterFor(listing.brokerId)
-    if (!adapter.confirmByEmail) throw new Error("this broker has no email confirmation step")
+    if (!adapter.confirmByEmail) throw new RequestValidationError("this broker has no email confirmation step")
     const url = validateBrokerConfirmationUrl(rawUrl, listing.brokerId)
     if (sub.status !== "awaiting_email" && !(sub.status === "attention_required" &&
       sub.attentionOperation === "confirm" && retryAcknowledged)) {
-      throw new Error("this attempt is not waiting for email confirmation, or needs retry acknowledgement")
+      throw new ConflictError("this attempt is not waiting for email confirmation, or needs retry acknowledgement")
     }
     if (!store.transitionSubmission(sub.id, sub.status, "confirming", { lastError: null, attentionOperation: null })) {
       return store.getSubmission(sub.id)!
