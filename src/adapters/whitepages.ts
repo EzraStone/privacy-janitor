@@ -37,6 +37,7 @@ import {
   isPersonProfileSlug,
   namesFrom,
   phonesFrom,
+  relativesFrom,
 } from "./helpers.ts"
 
 const SUPPRESSION_URL = "https://www.whitepages.com/suppression_requests"
@@ -134,7 +135,7 @@ export const whitepages: BrokerAdapter = {
             '[data-testid="relative"]',
             'a[href*="/relative/"]',
             ".relative",
-          ], namesFrom),
+          ], (texts) => relativesFrom(texts, displayName)),
           aliases: await tryAllTexts(page, ['[data-testid="alias"]', ".alias"], namesFrom),
         }
 

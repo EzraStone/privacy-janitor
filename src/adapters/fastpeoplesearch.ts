@@ -31,8 +31,8 @@ import {
   agesFrom,
   explainListing,
   isPersonProfileSlug,
-  namesFrom,
   phonesFrom,
+  relativesFrom,
 } from "./helpers.ts"
 
 const REMOVAL_URL = "https://www.fastpeoplesearch.com/removal"
@@ -147,7 +147,7 @@ export const fastpeoplesearch: BrokerAdapter = {
           relatives: await tryAllTexts(page, [
             'a[href*="/name/"]',
             '[class*="relative" i]',
-          ], namesFrom),
+          ], (texts) => relativesFrom(texts, displayName)),
         }
 
         for (const k of Object.keys(exposedData) as Array<keyof typeof exposedData>) {

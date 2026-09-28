@@ -109,7 +109,8 @@ for (const adapter of adapters) {
     [fields.address]: [{ text: "742 Evergreen Terrace\nChicago, IL 60601" }, { text: address }],
     [fields.phone[0]]: [{ text: "(312) 555-0142" }, { text: "312-555-0142" }],
     [fields.age[0]]: [{ text: "Age 42" }],
-    [fields.relative[0]]: [{ text: "Casey Example" }, { text: "Relatives, associates and neighbors of Jordan Example in Chicago, Illinois" }],
+    [fields.relative[0]]: [{ text: "Casey Example" }, { text: person.fullName }, { text: "Casey Example" },
+      { text: "Relatives, associates and neighbors of Jordan Example in Chicago, Illinois" }],
     ...(fields.email ? { [fields.email]: [{ text: "jordan@example.com" }, { text: "privacy@spokeo.com" }] } : {}),
   })
   assert.deepEqual(direct.exposedData, {

@@ -31,8 +31,8 @@ import {
   emailsFrom,
   explainListing,
   isPersonProfileSlug,
-  namesFrom,
   phonesFrom,
+  relativesFrom,
 } from "./helpers.ts"
 
 const OPTOUT_URL = "https://www.spokeo.com/optout"
@@ -134,7 +134,7 @@ export const spokeo: BrokerAdapter = {
             'a[href*="-F"]',
             '[data-testid="relative"]',
             ".relative",
-          ], namesFrom),
+          ], (texts) => relativesFrom(texts, displayName)),
           emails: await tryAllTexts(page, ['[data-testid="email"]', 'a[href^="mailto:"]'], (texts) => emailsFrom(texts, "spokeo.com")),
         }
 

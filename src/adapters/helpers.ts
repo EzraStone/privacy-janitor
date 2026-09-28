@@ -309,6 +309,21 @@ export function namesFrom(texts: string[]): string[] {
 }
 
 /**
+ * Relatives as names, each once. A relatives selector can also match links to
+ * the listed person's own profile, and they are not their own relative. A Jr.
+ * or Sr. of the same name has another word, so it stays.
+ */
+export function relativesFrom(texts: string[], listedName: string): string[] {
+  const seen = new Set([nameWords(listedName).join(" ")])
+  return namesFrom(texts).filter((name) => {
+    const key = nameWords(name).join(" ")
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/**
  * Addresses, one tidy line each. Brokers print an address over two lines,
  * the same address can match two selectors, and an address selector can also
  * match the wrapper that holds the whole address history: a text containing

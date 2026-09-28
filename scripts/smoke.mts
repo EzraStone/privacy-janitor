@@ -24,6 +24,7 @@ import {
   matchScore,
   namesFrom,
   phonesFrom,
+  relativesFrom,
   requireProfileName,
   scoreMatch,
 } from "../src/adapters/helpers.ts"
@@ -218,6 +219,11 @@ check("names are kept and trimmed",
 check("a layout block is dropped", namesFrom(["Jordan Example\nAge 42\n742 Evergreen Terrace"]).length === 0)
 check("an overlong line is dropped", namesFrom(["Relatives " + "and associates ".repeat(5)]).length === 0)
 check("text without letters is dropped", namesFrom(["123", "—"]).length === 0)
+// A relatives selector can match links to the listed person's own profile,
+// and a relative linked twice. A Jr. or Sr. of the same name stays.
+check("the listed person is not their own relative; repeats collapse", JSON.stringify(relativesFrom(
+  ["Casey Example", "Jordan Example", "casey  example", "José Example Sr."], "Jordán Example",
+)) === JSON.stringify(["Casey Example", "José Example Sr."]))
 
 console.log("smoke: scraped addresses are tidied")
 // An address can span lines, match two selectors, or sit inside a wrapper
