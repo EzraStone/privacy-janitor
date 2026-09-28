@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server"
+import { existsSync } from "node:fs"
+import { join } from "node:path"
 import { ok, fail, failFromError, readJson } from "../_lib"
 import * as store from "@/store"
-import { resumeIncompleteScans, startScan } from "@/engine/orchestrator"
+import { SCAN_SCREENSHOT, resumeIncompleteScans, startScan } from "@/engine/orchestrator"
 import { optOuts } from "@/engine/optouts"
 import { matchHintsFor } from "@/engine/match-hints"
 import { adapters } from "@/adapters/registry"
@@ -21,6 +23,12 @@ export async function GET(req: NextRequest) {
       optOuts.resume()
     }
     const listings = store.listListings()
+    // Link only to screenshots that exist: a failed capture leaves none.
+    const searchScreenshots: Record<string, string> = {}
+    for (const listing of listings) {
+      const shot = listing.screenshotPath && join(listing.screenshotPath, `${SCAN_SCREENSHOT}.png`)
+      if (shot && existsSync(shot)) searchScreenshots[listing.id] = shot
+    }
     return ok({
       identities: store.listIdentities(),
       listings,
@@ -28,6 +36,7 @@ export async function GET(req: NextRequest) {
       submissions: store.listSubmissions(),
       scans: store.listScanRuns(),
       brokers: adapters.map(({ id, name }) => ({ id, name })),
+      searchScreenshots,
     })
   } catch (err) {
     return failFromError(err)

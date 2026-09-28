@@ -17,6 +17,8 @@ interface StateResponse {
   scans: ScanRun[]
   matchHints?: Record<string, MatchExplanation>
   brokers?: Array<{ id: string; name: string }>
+  /** Listing id to the screenshot of the search results it was found in. */
+  searchScreenshots?: Record<string, string>
 }
 
 const statusLabel: Record<SubmissionStatus, string> = {
@@ -433,6 +435,7 @@ export default function Home() {
           <div className="grid gap-4 md:grid-cols-2">
             {pendingListings.map((l) => (
               <ListingCard key={l.id} listing={l} broker={brokerName(l.brokerId)} match={state?.matchHints?.[l.id]}
+                searchShot={state?.searchScreenshots?.[l.id]}
                 onConfirm={() => void stateAction({ action: "confirm-listing", listingId: l.id }, `c-${l.id}`)}
                 onReject={() => void stateAction({ action: "reject-listing", listingId: l.id }, `c-${l.id}`)}
               />
@@ -452,6 +455,7 @@ export default function Home() {
           <div className="grid gap-4 md:grid-cols-2">
             {rejectedListings.map((l) => (
               <ListingCard key={l.id} listing={l} broker={brokerName(l.brokerId)}
+                searchShot={state?.searchScreenshots?.[l.id]}
                 onReviewAgain={() => void stateAction({ action: "review-listing", listingId: l.id }, `r-${l.id}`)}
               />
             ))}
@@ -812,11 +816,12 @@ function Detail({ mark, label, children }: { mark: string; label: string; childr
 }
 
 function ListingCard({
-  listing, broker, match, onConfirm, onReject, onReviewAgain,
+  listing, broker, match, searchShot, onConfirm, onReject, onReviewAgain,
 }: {
   listing: Listing
   broker: string
   match?: MatchExplanation
+  searchShot?: string
   onConfirm?: () => void
   onReject?: () => void
   onReviewAgain?: () => void
@@ -838,6 +843,12 @@ function ListingCard({
       <a href={listing.url} target="_blank" rel="noopener noreferrer" className="link-std block truncate">
         {listing.url}
       </a>
+      {/* The broker's own results page, captured when the listing was found. */}
+      {searchShot && (
+        <a href={evidenceUrl(searchShot)} target="_blank" rel="noopener noreferrer" className="link-std inline-block text-xs">
+          Search results screenshot
+        </a>
+      )}
       {match && <MatchHint match={match} />}
       {onConfirm && onReject && (
         <div className="flex gap-2 pt-1">
@@ -868,8 +879,12 @@ function formatDay(iso: string): string {
 
 // Inline screenshots are clipped to keep the queue scannable, so each links to
 // the whole image: a person approving a request must be able to see all of it.
+function evidenceUrl(path: string): string {
+  return `/api/evidence?file=${encodeURIComponent(path.replace(/\\/g, "/"))}`
+}
+
 function EvidenceShot({ path, alt, linkText }: { path: string; alt: string; linkText: string }) {
-  const src = `/api/evidence?file=${encodeURIComponent(path.replace(/\\/g, "/"))}`
+  const src = evidenceUrl(path)
   return (
     <>
       {/* eslint-disable-next-line @next/next/no-img-element */}

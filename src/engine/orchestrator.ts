@@ -11,6 +11,9 @@ import { withBrokerSession } from "./solari.ts"
 
 // ── scan ────────────────────────────────────────────────────────────────────
 
+/** Each broker scan's search-results screenshot, named inside its evidence folder. */
+export const SCAN_SCREENSHOT = "scan-result-state"
+
 type OrchestratorGlobal = typeof globalThis & {
   __pjActiveScans?: Map<string, Promise<void>>
 }
@@ -99,7 +102,7 @@ export async function runScan(
         // Keep a last-page fallback only if that evidence capture failed.
         const screenshot = observation.searchScreenshot ??
           await page.screenshot({ fullPage: true }).catch(() => undefined)
-        if (screenshot) runEvidence.screenshot("scan-result-state", screenshot)
+        if (screenshot) runEvidence.screenshot(SCAN_SCREENSHOT, screenshot)
 
         // Checkpoint before the browser closes, as opt-out receipts do: a
         // teardown failure must not discard a completed scan, or orphan the

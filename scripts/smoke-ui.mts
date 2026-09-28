@@ -29,8 +29,13 @@ function listing(id: string, displayName: string, confirmedMine: boolean | null,
   store.upsertListing({ id, brokerId: "spokeo", identityId: "id_ui", url: `https://www.spokeo.com/${id}`,
     displayName, exposedData: {}, confirmedMine, firstSeenAt: now, lastSeenAt: now, ...extra })
 }
+// The scan that found hint-strong saved its search-results screenshot.
+const searchRun = join(directory, "evidence", "scan-spokeo-run")
+mkdirSync(searchRun, { recursive: true })
+writeFileSync(join(searchRun, "scan-result-state.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64"))
 // Awaiting review: one per hint headline.
-listing("hint-strong", person, null, { exposedData: { addresses: ["742 Evergreen Terrace, Chicago, IL"], age: "42", relatives: ["Casey Example"] } })
+listing("hint-strong", person, null, { screenshotPath: searchRun,
+  exposedData: { addresses: ["742 Evergreen Terrace, Chicago, IL"], age: "42", relatives: ["Casey Example"] } })
 listing("hint-namesake", person, null, { exposedData: { addresses: ["31 Spooner St, Chicago, IL"] } })
 listing("hint-contra", "Jordan A Example", null, { exposedData: { addresses: ["1640 Riverside Dr, Austin, TX"], age: "61" } })
 listing("hint-sparse", person, null)
@@ -150,6 +155,11 @@ try {
   assert.match(strongCard, /Age: 42/)
   assert.match(strongCard, /Relatives: Casey Example/)
   assert.doesNotMatch(strongCard, /📍|📞|👤|👥/)
+  // A card links to the search results it came from, when that screenshot exists.
+  const searchShot = card(page, "hint-strong").getByRole("link", { name: "Search results screenshot" })
+  assert.equal(await searchShot.getAttribute("target"), "_blank")
+  assert.equal((await page.request.get(new URL((await searchShot.getAttribute("href"))!, base).href)).headers()["content-type"], "image/png")
+  assert.equal(await card(page, "hint-sparse").getByRole("link", { name: "Search results screenshot" }).count(), 0, "no link to missing evidence")
   console.log("ok: review cards explain which details match")
   // Keyboard focus shows as the same white ring on every control, not a
   // browser default drawn in the control's own colour.
