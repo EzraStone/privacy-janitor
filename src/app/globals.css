@@ -16,6 +16,14 @@
   ::selection {
     @apply bg-white text-black;
   }
+
+  /* One high-contrast keyboard focus ring. Browser defaults can draw in the
+     control's own colour, which vanishes on a white button over the black
+     page; the offset keeps a gap so the ring reads on white controls too.
+     Text inputs keep their own focus border and ring. */
+  :where(a, button, summary, [tabindex]):focus-visible {
+    @apply outline-2 outline-offset-2 outline-white;
+  }
 }
 
 @layer components {

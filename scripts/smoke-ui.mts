@@ -144,6 +144,17 @@ try {
   assert.match(strongCard, /Relatives: Casey Example/)
   assert.doesNotMatch(strongCard, /📍|📞|👤|👥/)
   console.log("ok: review cards explain which details match")
+  // Keyboard focus shows as the same white ring on every control, not a
+  // browser default drawn in the control's own colour.
+  for (const control of [button(card(page, "hint-strong"), "This is me"), page.getByRole("button", { name: "Delete profile" })]) {
+    await control.focus()
+    await page.waitForTimeout(400) // buttons transition outline-color over 150ms
+    const ring = await control.evaluate((el) => {
+      const style = getComputedStyle(el)
+      return `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor}`
+    })
+    assert.equal(ring, "solid 2px rgb(255, 255, 255)")
+  }
   // The selected profile is conveyed by state, not only by colour.
   await page.getByRole("button", { name: /^Jordan Example/, pressed: true }).waitFor()
   // The scan panel says what the latest scan found, next to the button that runs one.
