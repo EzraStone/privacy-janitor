@@ -256,7 +256,7 @@ export default function Home() {
             <p className="eyebrow">01 / Profiles</p>
             <h2 className="mt-1 text-xl font-semibold tracking-tight">Who are we protecting?</h2>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 whitespace-nowrap">
             <button
               ref={addProfileRef}
               className="btn-secondary"
@@ -282,6 +282,12 @@ export default function Home() {
               >
                 Edit
               </button>
+            )}
+            {identity && (
+              // A plain download link: the export route answers with an attachment.
+              <a className="btn-secondary" href={`/api/export?identityId=${encodeURIComponent(identity.id)}`} download>
+                Download records
+              </a>
             )}
             {identity && (
               <button

@@ -251,6 +251,18 @@ try {
   assert.equal(await history.locator(".card").count(), 7)
   console.log("ok: scan history stays short until expanded")
 
+  // The selected profile's records download as a JSON file.
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Download records" }).click()])
+  assert.match(download.suggestedFilename(), /^privacy-janitor-jordan-example-\d{4}-\d{2}-\d{2}\.json$/)
+  const downloaded = JSON.parse(readFileSync((await download.path())!, "utf8"))
+  assert.equal(downloaded.profile.fullName, person)
+  console.log("ok: records download for the selected profile")
+
+  // At phone width the profile actions wrap instead of pushing the page sideways.
+  await page.setViewportSize({ width: 375, height: 800 })
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= 375), "no horizontal scroll at 375px")
+  await page.setViewportSize({ width: 1280, height: 900 })
+
   // Opening the profile form moves focus into it; cancelling returns it.
   const addProfile = page.getByRole("button", { name: "+ Add profile" })
   assert.equal(await addProfile.getAttribute("aria-expanded"), "false")
