@@ -150,9 +150,9 @@ export async function withBrokerSession<T>(
     evidence: RunEvidence,
     rawPage: Page,
   ) => Promise<T>,
-  options: { proxySessionId?: string } = {},
+  options: { proxySessionId?: string; client?: Solari } = {},
 ): Promise<{ result: T; evidence: RunEvidence }> {
-  const client = getSolariClient()
+  const client = options.client ?? getSolariClient()
   const runId = `${flowName}-${Date.now().toString(36)}`
   const evidence = createRunEvidence(runId, proxySessionId(options.proxySessionId ?? runId))
 
@@ -161,6 +161,7 @@ export async function withBrokerSession<T>(
   evidence.sessionId = browser.id
   evidence.stealth = stealth
 
+  let flowFailed = false
   try {
     const rawPage = await browser.newPage()
     // Wrap (NOT mutate) the Playwright page — adapters get the BrokerPage
@@ -168,8 +169,17 @@ export async function withBrokerSession<T>(
     const page = adaptPage(rawPage)
     const result = await fn(page, evidence, rawPage)
     return { result, evidence }
+  } catch (error) {
+    flowFailed = true
+    throw error
   } finally {
-    await browser.close()
+    // After a failed flow, a failed close must not replace the flow's error:
+    // the scan result would record the close instead of the real cause.
+    try {
+      await browser.close()
+    } catch (closeError) {
+      if (!flowFailed) throw closeError
+    }
   }
 }
 

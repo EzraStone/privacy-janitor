@@ -358,6 +358,23 @@ check("jailed path removed", cleanup.removeEvidencePath(join(tempRoot, "evidence
 check("outside path refused", cleanup.removeEvidencePath(join(tmpdir(), "some-other-file.txt")) === false)
 check("evidence root itself refused", cleanup.removeEvidencePath(join(tempRoot, "evidence")) === false)
 
+// A failed flow must be reported by its own error. If the browser then also
+// fails to close, that error must not replace the cause in the scan result.
+const { withBrokerSession } = await import("../src/engine/solari.ts")
+const brokenClose = {
+  async launch() {
+    return { id: "sess_fixture", async newPage() { return {} }, async close() { throw new Error("browser close failed") } }
+  },
+} as unknown as import("@solarisdk/browser").Solari
+const failureOf = async (flow: () => Promise<unknown>) => {
+  try { await withBrokerSession("scan-fixture", flow, { client: brokenClose }) } catch (error) { return (error as Error).message }
+  return "no error"
+}
+check("a flow's own failure survives a failed browser close",
+  await failureOf(async () => { throw new Error("Verify you are human") }) === "Verify you are human")
+check("a close failure after a successful flow is still reported",
+  await failureOf(async () => "done") === "browser close failed")
+
 // A new profile is saved by upsert, so a colliding id would silently
 // overwrite someone else's record: ids carry 64 bits of crypto randomness.
 const generated = Array.from({ length: 10_000 }, () => store.newId("id"))
